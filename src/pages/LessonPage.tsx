@@ -1,6 +1,7 @@
 import { useParams, Link, Navigate } from "react-router-dom";
 import { Layout, AdPlaceholder } from "@/components/layout";
 import { SpreadsheetTask } from "@/components/lessons/SpreadsheetTask";
+import { InteractiveLesson } from "@/components/lessons/InteractiveLesson";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
