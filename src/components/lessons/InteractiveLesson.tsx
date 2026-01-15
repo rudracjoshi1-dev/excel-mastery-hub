@@ -143,7 +143,7 @@ export function InteractiveLesson({
         </Alert>
       )}
 
-      <div className="border border-border rounded-lg overflow-auto bg-white p-2">
+      <div className="spreadsheet-container p-2">
         <Spreadsheet
           data={showModelAnswer ? modelMatrix : data}
           onChange={showModelAnswer ? undefined : setData}

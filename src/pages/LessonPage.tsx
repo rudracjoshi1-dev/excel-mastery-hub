@@ -1,6 +1,5 @@
 import { useParams, Link, Navigate } from "react-router-dom";
 import { Layout, AdPlaceholder } from "@/components/layout";
-import { SpreadsheetTask } from "@/components/lessons/SpreadsheetTask";
 import { InteractiveLesson } from "@/components/lessons/InteractiveLesson";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,7 +121,7 @@ export default function LessonPage() {
           {/* Interactive Task */}
           <section className="mb-8">
             <h2 className="text-2xl font-bold text-foreground mb-6">Interactive Task</h2>
-            <SpreadsheetTask
+            <InteractiveLesson
               instructions={lesson.interactiveTask.instructions}
               initialData={lesson.interactiveTask.initialData}
               expectedResult={lesson.interactiveTask.expectedResult}
