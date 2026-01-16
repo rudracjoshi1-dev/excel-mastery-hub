@@ -8,6 +8,7 @@ import "@univerjs/preset-sheets-core/lib/index.css";
 // Sorting plugin imports
 import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
 import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
+import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
 
 export interface SheetData {
@@ -108,7 +109,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       const { univerAPI, univer } = createUniver({
         locale: LocaleType.EN_US,
         locales: {
-          [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS),
+          [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS),
         },
         presets: [
           UniverSheetsCorePreset({
