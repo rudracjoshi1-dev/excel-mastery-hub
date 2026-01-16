@@ -5,6 +5,11 @@ import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
 import type { FUniver } from "@univerjs/presets";
 import "@univerjs/preset-sheets-core/lib/index.css";
 
+// Sorting plugin imports
+import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
+import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
+import "@univerjs/sheets-sort-ui/lib/index.css";
+
 export interface SheetData {
   id?: string;
   name?: string;
@@ -100,7 +105,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       isInitializedRef.current = true;
 
       // Create Univer instance with sheets preset
-      const { univerAPI } = createUniver({
+      const { univerAPI, univer } = createUniver({
         locale: LocaleType.EN_US,
         locales: {
           [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS),
@@ -111,6 +116,10 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           }),
         ],
       });
+
+      // Register sorting plugins for toolbar functionality
+      univer.registerPlugin(UniverSheetsSortPlugin);
+      univer.registerPlugin(UniverSheetsSortUIPlugin);
 
       univerAPIRef.current = univerAPI;
 
