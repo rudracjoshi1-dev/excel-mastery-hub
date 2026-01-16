@@ -1,6 +1,7 @@
 import { useParams, Link, Navigate } from "react-router-dom";
 import { Layout, AdPlaceholder } from "@/components/layout";
 import { InteractiveLesson } from "@/components/lessons/InteractiveLesson";
+import { UniverInteractiveLesson } from "@/components/lessons/UniverInteractiveLesson";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,14 +122,25 @@ export default function LessonPage() {
           {/* Interactive Task */}
           <section className="mb-8">
             <h2 className="text-2xl font-bold text-foreground mb-6">Interactive Task</h2>
-            <InteractiveLesson
-              instructions={lesson.interactiveTask.instructions}
-              initialData={lesson.interactiveTask.initialData}
-              expectedResult={lesson.interactiveTask.expectedResult}
-              hints={lesson.hints}
-              answerExplanation={lesson.answerExplanation}
-              validationRules={lesson.interactiveTask.validationRules}
-            />
+            {lesson.id === 1 ? (
+              <UniverInteractiveLesson
+                instructions={lesson.interactiveTask.instructions}
+                initialData={lesson.interactiveTask.initialData}
+                expectedResult={lesson.interactiveTask.expectedResult}
+                hints={lesson.hints}
+                answerExplanation={lesson.answerExplanation}
+                validationRules={lesson.interactiveTask.validationRules}
+              />
+            ) : (
+              <InteractiveLesson
+                instructions={lesson.interactiveTask.instructions}
+                initialData={lesson.interactiveTask.initialData}
+                expectedResult={lesson.interactiveTask.expectedResult}
+                hints={lesson.hints}
+                answerExplanation={lesson.answerExplanation}
+                validationRules={lesson.interactiveTask.validationRules}
+              />
+            )}
           </section>
 
           <AdPlaceholder size="banner" className="my-8" />
