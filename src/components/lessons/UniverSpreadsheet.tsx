@@ -11,6 +11,18 @@ import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
 
+// Filter plugin imports
+import { UniverSheetsFilterPlugin } from "@univerjs/sheets-filter";
+import { UniverSheetsFilterUIPlugin } from "@univerjs/sheets-filter-ui";
+import SheetsFilterUIEnUS from "@univerjs/sheets-filter-ui/locale/en-US";
+import "@univerjs/sheets-filter-ui/lib/index.css";
+
+// Conditional formatting plugin imports
+import { UniverSheetsConditionalFormattingPlugin } from "@univerjs/sheets-conditional-formatting";
+import { UniverSheetsConditionalFormattingUIPlugin } from "@univerjs/sheets-conditional-formatting-ui";
+import SheetsConditionalFormattingUIEnUS from "@univerjs/sheets-conditional-formatting-ui/locale/en-US";
+import "@univerjs/sheets-conditional-formatting-ui/lib/index.css";
+
 export interface SheetData {
   id?: string;
   name?: string;
@@ -37,6 +49,8 @@ export interface UniverSpreadsheetRef {
   getAPI: () => FUniver | null;
   /** End editing to commit current cell value */
   endEditing: () => Promise<void>;
+  /** Reset the spreadsheet to initial data */
+  reset: () => void;
 }
 
 /**
@@ -57,13 +71,19 @@ export function arrayToCellData(data: string[][]): Record<number, Record<number,
 
 /**
  * Reusable Univer Spreadsheet component with Excel-like functionality
- * Supports keyboard navigation, formulas (SUM, AVERAGE, etc.), copy/paste
+ * Supports keyboard navigation, formulas (SUM, AVERAGE, IF, COUNT, TODAY, etc.), 
+ * copy/paste, drag fill, sorting, filtering, conditional formatting
  */
 export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsheetProps>(
   ({ initialData, height = 400, readOnly = false, onChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const univerAPIRef = useRef<FUniver | null>(null);
+    const univerInstanceRef = useRef<any>(null);
     const isInitializedRef = useRef(false);
+    const initialDataRef = useRef(initialData);
+
+    // Update initial data ref when prop changes
+    initialDataRef.current = initialData;
 
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
@@ -75,8 +95,8 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         if (!sheet) return null;
         
         // Get data using Range API
-        const rowCount = initialData?.rowCount || 20;
-        const colCount = initialData?.columnCount || 10;
+        const rowCount = initialDataRef.current?.rowCount || 20;
+        const colCount = initialDataRef.current?.columnCount || 10;
         const range = sheet.getRange(0, 0, rowCount, colCount);
         
         try {
@@ -98,6 +118,42 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           await (workbook as any).endEditingAsync(true);
         }
       },
+      reset: () => {
+        if (!univerAPIRef.current || !initialDataRef.current) return;
+        const workbook = univerAPIRef.current.getActiveWorkbook();
+        if (!workbook) return;
+        const sheet = workbook.getActiveSheet();
+        if (!sheet) return;
+        
+        // Clear existing data and restore initial data
+        const rowCount = initialDataRef.current.rowCount || 20;
+        const colCount = initialDataRef.current.columnCount || 10;
+        const range = sheet.getRange(0, 0, rowCount, colCount);
+        
+        try {
+          // Clear all cells first
+          const clearData: (string | null)[][] = Array(rowCount).fill(null).map(() => 
+            Array(colCount).fill(null)
+          );
+          range.setValues(clearData);
+          
+          // Restore initial data
+          if (initialDataRef.current.cellData) {
+            Object.entries(initialDataRef.current.cellData).forEach(([rowStr, rowData]) => {
+              const rowIndex = parseInt(rowStr);
+              Object.entries(rowData as Record<number, { v?: string | number }>).forEach(([colStr, cellData]) => {
+                const colIndex = parseInt(colStr);
+                const cellRange = sheet.getRange(rowIndex, colIndex, 1, 1);
+                if (cellData.v !== undefined) {
+                  cellRange.setValue(cellData.v);
+                }
+              });
+            });
+          }
+        } catch (e) {
+          console.error("Error resetting spreadsheet:", e);
+        }
+      },
     }));
 
     useEffect(() => {
@@ -105,11 +161,19 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       
       isInitializedRef.current = true;
 
-      // Create Univer instance with sheets preset
+      // Merge all locales for comprehensive i18n support
+      const mergedLocales = mergeLocales(
+        UniverPresetSheetsCoreEnUS,
+        SheetsSortUIEnUS,
+        SheetsFilterUIEnUS,
+        SheetsConditionalFormattingUIEnUS
+      );
+
+      // Create Univer instance with sheets preset and all plugins
       const { univerAPI, univer } = createUniver({
         locale: LocaleType.EN_US,
         locales: {
-          [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS),
+          [LocaleType.EN_US]: mergedLocales,
         },
         presets: [
           UniverSheetsCorePreset({
@@ -118,11 +182,20 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         ],
       });
 
-      // Register sorting plugins for toolbar functionality
+      // Register sorting plugins
       univer.registerPlugin(UniverSheetsSortPlugin);
       univer.registerPlugin(UniverSheetsSortUIPlugin);
 
+      // Register filter plugins (using type assertion for version compatibility)
+      univer.registerPlugin(UniverSheetsFilterPlugin as any);
+      univer.registerPlugin(UniverSheetsFilterUIPlugin as any);
+
+      // Register conditional formatting plugins (using type assertion for version compatibility)
+      univer.registerPlugin(UniverSheetsConditionalFormattingPlugin as any);
+      univer.registerPlugin(UniverSheetsConditionalFormattingUIPlugin as any);
+
       univerAPIRef.current = univerAPI;
+      univerInstanceRef.current = univer;
 
       // Create initial workbook with data
       const workbookData = {
