@@ -11,18 +11,6 @@ import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
 
-// Filter plugin imports
-import { UniverSheetsFilterPlugin } from "@univerjs/sheets-filter";
-import { UniverSheetsFilterUIPlugin } from "@univerjs/sheets-filter-ui";
-import SheetsFilterUIEnUS from "@univerjs/sheets-filter-ui/locale/en-US";
-import "@univerjs/sheets-filter-ui/lib/index.css";
-
-// Conditional formatting plugin imports
-import { UniverSheetsConditionalFormattingPlugin } from "@univerjs/sheets-conditional-formatting";
-import { UniverSheetsConditionalFormattingUIPlugin } from "@univerjs/sheets-conditional-formatting-ui";
-import SheetsConditionalFormattingUIEnUS from "@univerjs/sheets-conditional-formatting-ui/locale/en-US";
-import "@univerjs/sheets-conditional-formatting-ui/lib/index.css";
-
 export interface SheetData {
   id?: string;
   name?: string;
@@ -72,7 +60,7 @@ export function arrayToCellData(data: string[][]): Record<number, Record<number,
 /**
  * Reusable Univer Spreadsheet component with Excel-like functionality
  * Supports keyboard navigation, formulas (SUM, AVERAGE, IF, COUNT, TODAY, etc.), 
- * copy/paste, drag fill, sorting, filtering, conditional formatting
+ * copy/paste, drag fill, sorting
  */
 export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsheetProps>(
   ({ initialData, height = 400, readOnly = false, onChange }, ref) => {
@@ -161,15 +149,13 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       
       isInitializedRef.current = true;
 
-      // Merge all locales for comprehensive i18n support
+      // Merge locales for i18n support
       const mergedLocales = mergeLocales(
         UniverPresetSheetsCoreEnUS,
-        SheetsSortUIEnUS,
-        SheetsFilterUIEnUS,
-        SheetsConditionalFormattingUIEnUS
+        SheetsSortUIEnUS
       );
 
-      // Create Univer instance with sheets preset and all plugins
+      // Create Univer instance with sheets preset
       const { univerAPI, univer } = createUniver({
         locale: LocaleType.EN_US,
         locales: {
@@ -185,14 +171,6 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       // Register sorting plugins
       univer.registerPlugin(UniverSheetsSortPlugin);
       univer.registerPlugin(UniverSheetsSortUIPlugin);
-
-      // Register filter plugins (using type assertion for version compatibility)
-      univer.registerPlugin(UniverSheetsFilterPlugin as any);
-      univer.registerPlugin(UniverSheetsFilterUIPlugin as any);
-
-      // Register conditional formatting plugins (using type assertion for version compatibility)
-      univer.registerPlugin(UniverSheetsConditionalFormattingPlugin as any);
-      univer.registerPlugin(UniverSheetsConditionalFormattingUIPlugin as any);
 
       univerAPIRef.current = univerAPI;
       univerInstanceRef.current = univer;
