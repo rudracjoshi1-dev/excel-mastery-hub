@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
 import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
@@ -16,6 +16,9 @@ import { UniverSheetsFilterPlugin } from "@univerjs/sheets-filter";
 import { UniverSheetsFilterUIPlugin } from "@univerjs/sheets-filter-ui";
 import SheetsFilterUIEnUS from "@univerjs/sheets-filter-ui/locale/en-US";
 import "@univerjs/sheets-filter-ui/lib/index.css";
+
+// Icons for custom toolbar
+import { Filter, ArrowUpDown, X } from "lucide-react";
 
 export interface SheetData {
   id?: string;
@@ -74,9 +77,94 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     const univerInstanceRef = useRef<any>(null);
     const isInitializedRef = useRef(false);
     const initialDataRef = useRef(initialData);
+    const [hasFilter, setHasFilter] = useState(false);
 
     // Update initial data ref when prop changes
     initialDataRef.current = initialData;
+
+    // Apply filter to the data range
+    const handleApplyFilter = () => {
+      if (!univerAPIRef.current) return;
+      const workbook = univerAPIRef.current.getActiveWorkbook();
+      if (!workbook) return;
+      const sheet = workbook.getActiveSheet();
+      if (!sheet) return;
+
+      try {
+        // Get the data range - find rows with actual data
+        const rowCount = initialDataRef.current?.rowCount || 20;
+        const colCount = initialDataRef.current?.columnCount || 10;
+        
+        // Find actual data extent
+        let lastDataRow = 0;
+        let lastDataCol = 0;
+        
+        if (initialDataRef.current?.cellData) {
+          Object.entries(initialDataRef.current.cellData).forEach(([rowStr, rowData]) => {
+            const rowIdx = parseInt(rowStr);
+            if (rowIdx > lastDataRow) lastDataRow = rowIdx;
+            Object.keys(rowData as object).forEach(colStr => {
+              const colIdx = parseInt(colStr);
+              if (colIdx > lastDataCol) lastDataCol = colIdx;
+            });
+          });
+        }
+        
+        // Select the data range and apply filter
+        const dataRange = sheet.getRange(0, 0, lastDataRow + 1, lastDataCol + 1);
+        
+        // Use the facade API to create filter
+        const sheetFilter = (sheet as any).getFilter?.();
+        if (sheetFilter) {
+          // Filter already exists
+          setHasFilter(true);
+          return;
+        }
+        
+        // Try to create filter using command
+        const commandService = univerInstanceRef.current?.__injector?.get?.('ICommandService');
+        if (commandService) {
+          commandService.executeCommand('sheet.command.create-filter', {
+            unitId: workbook.getId(),
+            subUnitId: sheet.getSheetId(),
+            range: {
+              startRow: 0,
+              endRow: lastDataRow,
+              startColumn: 0,
+              endColumn: lastDataCol
+            }
+          });
+          setHasFilter(true);
+        } else {
+          // Fallback: inform user to use menu
+          console.log('Filter command not available, use Data menu in toolbar');
+        }
+      } catch (e) {
+        console.error("Error applying filter:", e);
+      }
+    };
+
+    // Remove filter from the sheet
+    const handleRemoveFilter = () => {
+      if (!univerAPIRef.current) return;
+      const workbook = univerAPIRef.current.getActiveWorkbook();
+      if (!workbook) return;
+      const sheet = workbook.getActiveSheet();
+      if (!sheet) return;
+
+      try {
+        const commandService = univerInstanceRef.current?.__injector?.get?.('ICommandService');
+        if (commandService) {
+          commandService.executeCommand('sheet.command.remove-filter', {
+            unitId: workbook.getId(),
+            subUnitId: sheet.getSheetId(),
+          });
+          setHasFilter(false);
+        }
+      } catch (e) {
+        console.error("Error removing filter:", e);
+      }
+    };
 
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
@@ -143,6 +231,9 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               });
             });
           }
+          
+          // Also remove any active filter
+          setHasFilter(false);
         } catch (e) {
           console.error("Error resetting spreadsheet:", e);
         }
@@ -211,13 +302,50 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     }, []); // Empty deps - only run once on mount
 
     const containerHeight = typeof height === "number" ? `${height}px` : height;
+    // Subtract toolbar height from container
+    const spreadsheetHeight = typeof height === "number" ? height - 40 : `calc(${height} - 40px)`;
 
     return (
-      <div 
-        ref={containerRef} 
-        className="univer-spreadsheet-container rounded-lg overflow-hidden border border-border"
-        style={{ height: containerHeight, width: "100%" }}
-      />
+      <div className="univer-spreadsheet-wrapper rounded-lg overflow-hidden border border-border">
+        {/* Custom Toolbar */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border">
+          <span className="text-xs font-medium text-muted-foreground mr-2">Quick Actions:</span>
+          
+          {!hasFilter ? (
+            <button
+              onClick={handleApplyFilter}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              title="Apply filter to show dropdown arrows on column headers"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              Apply Filter
+            </button>
+          ) : (
+            <button
+              onClick={handleRemoveFilter}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              title="Remove filter from data"
+            >
+              <X className="h-3.5 w-3.5" />
+              Remove Filter
+            </button>
+          )}
+          
+          <div className="h-4 w-px bg-border mx-1" />
+          
+          <span className="text-xs text-muted-foreground">
+            <ArrowUpDown className="h-3 w-3 inline mr-1" />
+            Right-click column header → Sort A-Z / Z-A
+          </span>
+        </div>
+        
+        {/* Spreadsheet Container */}
+        <div 
+          ref={containerRef} 
+          className="univer-spreadsheet-container"
+          style={{ height: spreadsheetHeight, width: "100%" }}
+        />
+      </div>
     );
   }
 );
