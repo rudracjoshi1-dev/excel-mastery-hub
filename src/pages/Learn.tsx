@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Layout, AdPlaceholder } from "@/components/layout";
+import { LearnLayout, AdPlaceholder } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ export default function Learn() {
   const lessons = getAllLessons();
 
   return (
-    <Layout>
+    <LearnLayout>
       <div className="container mx-auto px-4 lg:px-8 py-12">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
@@ -57,6 +57,6 @@ export default function Learn() {
           </div>
         </div>
       </div>
-    </Layout>
+    </LearnLayout>
   );
 }
