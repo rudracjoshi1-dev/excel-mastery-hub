@@ -1,5 +1,5 @@
 import { useParams, Link, Navigate } from "react-router-dom";
-import { Layout, AdPlaceholder } from "@/components/layout";
+import { LearnLayout, AdPlaceholder } from "@/components/layout";
 import { InteractiveLesson } from "@/components/lessons/InteractiveLesson";
 import { UniverInteractiveLesson } from "@/components/lessons/UniverInteractiveLesson";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ export default function LessonPage() {
   }
 
   return (
-    <Layout>
+    <LearnLayout>
       <article className="container mx-auto px-4 lg:px-8 py-8 lg:py-12">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
@@ -189,6 +189,6 @@ export default function LessonPage() {
           </nav>
         </div>
       </article>
-    </Layout>
+    </LearnLayout>
   );
 }
