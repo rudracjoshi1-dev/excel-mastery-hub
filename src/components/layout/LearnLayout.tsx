@@ -8,16 +8,16 @@ interface LearnLayoutProps {
 }
 
 /**
- * Layout used for all /learn/* pages.
- * Renders Header + Sidebar + Content + Footer.
+ * Layout for all /learn/* pages.
+ * Header → Sidebar + Content → Footer.
  */
 export function LearnLayout({ children }: LearnLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <div className="flex flex-1">
+      <div className="flex flex-1 relative">
         <LearnSidebar />
-        <main className="flex-1 min-w-0">{children}</main>
+        <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
       </div>
       <Footer />
     </div>
