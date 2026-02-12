@@ -2,12 +2,48 @@ import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   ChevronRight,
-  Circle,
   PanelLeftClose,
   PanelLeft,
   BookOpen,
-  X,
   GraduationCap,
+  Compass,
+  MousePointerClick,
+  Keyboard,
+  Paintbrush,
+  Calculator,
+  FunctionSquare,
+  Plus,
+  BarChart3,
+  Hash,
+  GitBranch,
+  HelpCircle,
+  ToggleLeft,
+  Layers,
+  ShieldAlert,
+  Sigma,
+  Filter,
+  ListFilter,
+  ListChecks,
+  Search,
+  SearchCode,
+  SearchCheck,
+  Crosshair,
+  Type,
+  Scissors,
+  Eraser,
+  Link as LinkIcon,
+  Calendar,
+  Table2,
+  SlidersHorizontal,
+  Table,
+  Palette,
+  CheckSquare,
+  PieChart,
+  TableProperties,
+  LineChart,
+  LayoutDashboard,
+  FileText,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,6 +56,23 @@ import {
   type Phase,
   type Lesson,
 } from "@/data/lessonHierarchy";
+
+// ─── Icon map ─────────────────────────────────────────────────────
+const iconMap: Record<string, LucideIcon> = {
+  Compass, MousePointerClick, Keyboard, Paintbrush,
+  Calculator, FunctionSquare, Plus, BarChart3, Hash,
+  GitBranch, HelpCircle, ToggleLeft, Layers, ShieldAlert,
+  Sigma, Filter, ListFilter, ListChecks,
+  Search, SearchCode, SearchCheck, Crosshair,
+  Type, Scissors, Eraser, Link: LinkIcon, Calendar,
+  Table2, SlidersHorizontal, Table, Palette, CheckSquare,
+  PieChart, TableProperties, LineChart, LayoutDashboard,
+};
+
+function getIcon(name?: string): LucideIcon {
+  if (name && iconMap[name]) return iconMap[name];
+  return FileText;
+}
 
 // ─── Persist expanded state ───────────────────────────────────────
 const STORAGE_KEY = "learn-sidebar-state";
@@ -61,7 +114,7 @@ function NavContent({ state, pathname, togglePhase, toggleLesson, onNavigate }: 
     pathname === subLessonUrl(lesson.slug, subSlug);
 
   return (
-    <nav className="p-3 space-y-1" aria-label="Course navigation">
+    <nav className="p-2 space-y-0.5" aria-label="Course navigation">
       {phases.map((phase) => (
         <PhaseGroup
           key={phase.number}
@@ -88,7 +141,6 @@ export function LearnSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [state, setState] = useState<SidebarState>(loadState);
 
-  // Auto-expand active phase/lesson
   useEffect(() => {
     for (const phase of phases) {
       for (const lesson of phase.lessons) {
@@ -111,7 +163,6 @@ export function LearnSidebar() {
     }
   }, [pathname]);
 
-  // Close mobile drawer on navigation
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
@@ -190,24 +241,27 @@ export function LearnSidebar() {
             <PanelLeft className="h-4 w-4" />
           </Button>
           <div className="space-y-1.5">
-            {phases.map((phase) => (
-              <button
-                key={phase.number}
-                onClick={() => {
-                  setCollapsed(false);
-                  if (!state.expandedPhases.includes(phase.number)) {
-                    togglePhase(phase.number);
-                  }
-                }}
-                className={cn(
-                  "w-8 h-8 rounded-lg text-xs font-bold transition-all duration-200",
-                  "bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-105"
-                )}
-                title={`Phase ${phase.number}: ${phase.title}`}
-              >
-                {phase.number}
-              </button>
-            ))}
+            {phases.map((phase) => {
+              const PhaseIcon = getIcon(phase.icon);
+              return (
+                <button
+                  key={phase.number}
+                  onClick={() => {
+                    setCollapsed(false);
+                    if (!state.expandedPhases.includes(phase.number)) {
+                      togglePhase(phase.number);
+                    }
+                  }}
+                  className={cn(
+                    "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200",
+                    "bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-105"
+                  )}
+                  title={`Phase ${phase.number}: ${phase.title}`}
+                >
+                  <PhaseIcon className="h-4 w-4" />
+                </button>
+              );
+            })}
           </div>
         </aside>
       )}
@@ -215,7 +269,6 @@ export function LearnSidebar() {
       {/* ── Desktop full sidebar ───────────────────────────────── */}
       {!collapsed && (
         <aside className="hidden lg:flex flex-col w-[280px] border-r border-sidebar-border bg-sidebar-background shrink-0 sticky top-16 h-[calc(100vh-4rem)]">
-          {/* Header */}
           <div className="flex items-center justify-between px-4 h-12 border-b border-sidebar-border">
             <div className="flex items-center gap-2">
               <GraduationCap className="h-4 w-4 text-primary" />
@@ -234,12 +287,10 @@ export function LearnSidebar() {
             </Button>
           </div>
 
-          {/* Content */}
           <ScrollArea className="flex-1">
             <NavContent {...navProps} />
           </ScrollArea>
 
-          {/* Footer */}
           <div className="px-4 py-2.5 border-t border-sidebar-border">
             <p className="text-[10px] text-muted-foreground/60 text-center tracking-wide uppercase">
               {phases.length} phases · {phases.reduce((a, p) => a + p.lessons.length, 0)} lessons
@@ -273,12 +324,14 @@ function PhaseGroup({
   isSubLessonActive,
   onNavigate,
 }: PhaseGroupProps) {
+  const PhaseIcon = getIcon(phase.icon);
+
   return (
     <div className="mb-0.5">
       <button
         onClick={() => onTogglePhase(phase.number)}
         className={cn(
-          "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-colors duration-150",
+          "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors duration-150",
           "hover:bg-sidebar-accent/60",
           expanded && "bg-sidebar-accent/30"
         )}
@@ -292,21 +345,26 @@ function PhaseGroup({
         />
         <span
           className={cn(
-            "inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold shrink-0",
+            "inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0",
             phase.number <= 5
               ? "bg-primary/10 text-primary"
               : "bg-destructive/10 text-destructive"
           )}
         >
-          {phase.number}
+          <PhaseIcon className="h-3.5 w-3.5" />
         </span>
-        <span className="text-xs font-semibold text-sidebar-foreground truncate leading-tight">
-          {phase.title}
-        </span>
+        <div className="min-w-0 flex-1">
+          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+            Phase {phase.number}
+          </span>
+          <span className="block text-xs font-semibold text-sidebar-foreground truncate leading-tight">
+            {phase.title}
+          </span>
+        </div>
       </button>
 
       {expanded && (
-        <div className="ml-[22px] pl-3 border-l-2 border-sidebar-border/60 space-y-px mt-1 mb-2">
+        <div className="ml-[18px] pl-3 border-l-2 border-sidebar-border/60 space-y-px mt-0.5 mb-1.5">
           {phase.lessons.map((lesson) => (
             <LessonItem
               key={lesson.slug}
@@ -343,15 +401,16 @@ function LessonItem({
   onNavigate,
 }: LessonItemProps) {
   const hasSubLessons = lesson.subLessons.length > 0;
+  const LessonIcon = getIcon(lesson.icon);
 
   return (
-    <div>
-      <div className="flex items-center group">
+    <div className="overflow-hidden">
+      <div className="flex items-center gap-0.5 min-w-0">
         {/* Chevron toggle */}
         {hasSubLessons ? (
           <button
             onClick={() => onToggle(lesson.slug)}
-            className="p-1 rounded hover:bg-sidebar-accent/50 transition-colors"
+            className="p-1 rounded hover:bg-sidebar-accent/50 transition-colors shrink-0"
             aria-expanded={expanded}
             aria-label={`Toggle sub-lessons for ${lesson.title}`}
           >
@@ -363,7 +422,7 @@ function LessonItem({
             />
           </button>
         ) : (
-          <span className="w-5" />
+          <span className="w-5 shrink-0" />
         )}
 
         {/* Lesson link */}
@@ -371,20 +430,19 @@ function LessonItem({
           to={lessonUrl(lesson.slug)}
           onClick={onNavigate}
           className={cn(
-            "flex-1 flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] transition-all duration-150 min-w-0",
+            "flex-1 flex items-center gap-1.5 px-1.5 py-1.5 rounded-md text-[12px] transition-all duration-150 min-w-0 overflow-hidden",
             isActive
               ? "bg-primary/10 text-primary font-medium shadow-sm"
-              : "text-sidebar-foreground hover:bg-sidebar-accent/50 group-hover:bg-sidebar-accent/30"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/50"
           )}
         >
-          {/* Progress placeholder */}
-          <Circle
+          <LessonIcon
             className={cn(
-              "h-2.5 w-2.5 shrink-0 transition-colors",
-              isActive ? "text-primary" : "text-muted-foreground/30"
+              "h-3.5 w-3.5 shrink-0",
+              isActive ? "text-primary" : "text-muted-foreground/50"
             )}
           />
-          <span className="text-muted-foreground text-[11px] font-mono shrink-0 tabular-nums">
+          <span className="text-muted-foreground text-[10px] font-mono shrink-0 tabular-nums">
             {lesson.id}
           </span>
           <span className="truncate">{lesson.title}</span>
@@ -393,7 +451,7 @@ function LessonItem({
 
       {/* Sub-lessons */}
       {expanded && hasSubLessons && (
-        <div className="ml-5 pl-3 border-l border-sidebar-border/40 space-y-px mt-0.5 mb-1">
+        <div className="ml-5 pl-2.5 border-l border-sidebar-border/40 space-y-px mt-0.5 mb-1">
           {lesson.subLessons.map((sub) => {
             const active = isSubLessonActive(lesson, sub.slug);
             return (
@@ -402,16 +460,16 @@ function LessonItem({
                 to={subLessonUrl(lesson.slug, sub.slug)}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center gap-2 px-2 py-1 rounded-md text-xs transition-all duration-150 min-w-0",
+                  "flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] transition-all duration-150 min-w-0 overflow-hidden",
                   active
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                 )}
               >
-                <Circle
+                <span
                   className={cn(
-                    "h-2 w-2 shrink-0",
-                    active ? "text-primary" : "text-muted-foreground/25"
+                    "h-1.5 w-1.5 rounded-full shrink-0",
+                    active ? "bg-primary" : "bg-muted-foreground/25"
                   )}
                 />
                 <span className="truncate">{sub.title}</span>
