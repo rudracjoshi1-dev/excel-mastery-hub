@@ -430,7 +430,7 @@ function LessonItem({
           to={lessonUrl(lesson.slug)}
           onClick={onNavigate}
           className={cn(
-            "flex-1 flex items-center gap-1.5 px-1.5 py-1.5 rounded-md text-[12px] transition-all duration-150 min-w-0 overflow-hidden",
+            "flex-1 flex items-start gap-1.5 px-1.5 py-1.5 rounded-md text-[12px] transition-all duration-150 min-w-0",
             isActive
               ? "bg-primary/10 text-primary font-medium shadow-sm"
               : "text-sidebar-foreground hover:bg-sidebar-accent/50"
@@ -445,7 +445,7 @@ function LessonItem({
           <span className="text-muted-foreground text-[10px] font-mono shrink-0 tabular-nums">
             {lesson.id}
           </span>
-          <span className="truncate">{lesson.title}</span>
+          <span className="break-words whitespace-normal leading-snug">{lesson.title}</span>
         </Link>
       </div>
 
@@ -460,7 +460,7 @@ function LessonItem({
                 to={subLessonUrl(lesson.slug, sub.slug)}
                 onClick={onNavigate}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] transition-all duration-150 min-w-0 overflow-hidden",
+                  "flex items-start gap-1.5 px-2 py-1 rounded-md text-[11px] transition-all duration-150 min-w-0",
                   active
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
@@ -472,7 +472,7 @@ function LessonItem({
                     active ? "bg-primary" : "bg-muted-foreground/25"
                   )}
                 />
-                <span className="truncate">{sub.title}</span>
+                <span className="break-words whitespace-normal leading-snug">{sub.title}</span>
               </Link>
             );
           })}
