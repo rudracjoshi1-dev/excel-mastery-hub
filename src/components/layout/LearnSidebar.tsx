@@ -48,6 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   phases,
@@ -228,9 +229,20 @@ export function LearnSidebar() {
         </Sheet>
       </div>
 
-      {/* ── Desktop collapsed mini-rail ────────────────────────── */}
-      {collapsed && (
-        <aside className="hidden lg:flex flex-col items-center w-14 border-r border-sidebar-border bg-sidebar-background shrink-0 sticky top-16 h-[calc(100vh-4rem)]">
+      {/* ── Desktop sidebar (animates between collapsed & expanded) ── */}
+      <aside
+        className={cn(
+          "hidden lg:flex flex-col border-r border-sidebar-border bg-sidebar-background shrink-0 sticky top-16 h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out overflow-hidden",
+          collapsed ? "w-14" : "w-[280px]"
+        )}
+      >
+        {/* Collapsed mini-rail content */}
+        <div
+          className={cn(
+            "flex flex-col items-center transition-all duration-300",
+            collapsed ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none absolute inset-0"
+          )}
+        >
           <Button
             variant="ghost"
             size="icon"
@@ -254,7 +266,7 @@ export function LearnSidebar() {
                   }}
                   className={cn(
                     "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200",
-                    "bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-105"
+                    "bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110"
                   )}
                   title={`Phase ${phase.number}: ${phase.title}`}
                 >
@@ -263,16 +275,19 @@ export function LearnSidebar() {
               );
             })}
           </div>
-        </aside>
-      )}
+        </div>
 
-      {/* ── Desktop full sidebar ───────────────────────────────── */}
-      {!collapsed && (
-        <aside className="hidden lg:flex flex-col w-[280px] border-r border-sidebar-border bg-sidebar-background shrink-0 sticky top-16 h-[calc(100vh-4rem)]">
+        {/* Expanded content */}
+        <div
+          className={cn(
+            "flex flex-col flex-1 min-h-0 transition-all duration-300",
+            collapsed ? "opacity-0 pointer-events-none" : "opacity-100 pointer-events-auto"
+          )}
+        >
           <div className="flex items-center justify-between px-4 h-12 border-b border-sidebar-border">
             <div className="flex items-center gap-2">
               <GraduationCap className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold text-sidebar-foreground tracking-tight">
+              <span className="text-sm font-semibold text-sidebar-foreground tracking-tight whitespace-nowrap">
                 Course Outline
               </span>
             </div>
@@ -292,12 +307,12 @@ export function LearnSidebar() {
           </ScrollArea>
 
           <div className="px-4 py-2.5 border-t border-sidebar-border">
-            <p className="text-[10px] text-muted-foreground/60 text-center tracking-wide uppercase">
+            <p className="text-[10px] text-muted-foreground/60 text-center tracking-wide uppercase whitespace-nowrap">
               {phases.length} phases · {phases.reduce((a, p) => a + p.lessons.length, 0)} lessons
             </p>
           </div>
-        </aside>
-      )}
+        </div>
+      </aside>
     </>
   );
 }
@@ -327,45 +342,47 @@ function PhaseGroup({
   const PhaseIcon = getIcon(phase.icon);
 
   return (
-    <div className="mb-0.5">
-      <button
-        onClick={() => onTogglePhase(phase.number)}
-        className={cn(
-          "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors duration-150",
-          "hover:bg-sidebar-accent/60",
-          expanded && "bg-sidebar-accent/30"
-        )}
-        aria-expanded={expanded}
-      >
-        <ChevronRight
+    <Collapsible open={expanded} onOpenChange={() => onTogglePhase(phase.number)} className="mb-0.5">
+      <CollapsibleTrigger asChild>
+        <button
           className={cn(
-            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
-            expanded && "rotate-90"
+            "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all duration-200",
+            "hover:bg-sidebar-accent/60",
+            expanded && "bg-sidebar-accent/30"
           )}
-        />
-        <span
-          className={cn(
-            "inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0",
-            phase.number <= 5
-              ? "bg-primary/10 text-primary"
-              : "bg-destructive/10 text-destructive"
-          )}
+          aria-expanded={expanded}
         >
-          <PhaseIcon className="h-3.5 w-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-            Phase {phase.number}
+          <ChevronRight
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-300 ease-out",
+              expanded && "rotate-90"
+            )}
+          />
+          <span
+            className={cn(
+              "inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 transition-transform duration-200",
+              expanded && "scale-110",
+              phase.number <= 5
+                ? "bg-primary/10 text-primary"
+                : "bg-destructive/10 text-destructive"
+            )}
+          >
+            <PhaseIcon className="h-3.5 w-3.5" />
           </span>
-          <span className="block text-xs font-semibold text-sidebar-foreground truncate leading-tight">
-            {phase.title}
-          </span>
-        </div>
-      </button>
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              Phase {phase.number}
+            </span>
+            <span className="block text-xs font-semibold text-sidebar-foreground truncate leading-tight">
+              {phase.title}
+            </span>
+          </div>
+        </button>
+      </CollapsibleTrigger>
 
-      {expanded && (
+      <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
         <div className="ml-[18px] pl-3 border-l-2 border-sidebar-border/60 space-y-px mt-0.5 mb-1.5">
-          {phase.lessons.map((lesson) => (
+          {phase.lessons.map((lesson, i) => (
             <LessonItem
               key={lesson.slug}
               lesson={lesson}
@@ -374,11 +391,12 @@ function PhaseGroup({
               isActive={isLessonActive(lesson)}
               isSubLessonActive={isSubLessonActive}
               onNavigate={onNavigate}
+              index={i}
             />
           ))}
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -390,6 +408,7 @@ interface LessonItemProps {
   isActive: boolean;
   isSubLessonActive: (lesson: Lesson, subSlug: string) => boolean;
   onNavigate?: () => void;
+  index?: number;
 }
 
 function LessonItem({
@@ -399,12 +418,16 @@ function LessonItem({
   isActive,
   isSubLessonActive,
   onNavigate,
+  index = 0,
 }: LessonItemProps) {
   const hasSubLessons = lesson.subLessons.length > 0;
   const LessonIcon = getIcon(lesson.icon);
 
   return (
-    <div className="overflow-hidden">
+    <div
+      className="overflow-hidden animate-fade-in"
+      style={{ animationDelay: `${index * 30}ms`, animationFillMode: "backwards" }}
+    >
       <div className="flex items-center gap-0.5 min-w-0">
         {/* Chevron toggle */}
         {hasSubLessons ? (
@@ -416,7 +439,7 @@ function LessonItem({
           >
             <ChevronRight
               className={cn(
-                "h-3 w-3 text-muted-foreground/60 transition-transform duration-200",
+                "h-3 w-3 text-muted-foreground/60 transition-transform duration-300 ease-out",
                 expanded && "rotate-90"
               )}
             />
@@ -430,15 +453,15 @@ function LessonItem({
           to={lessonUrl(lesson.slug)}
           onClick={onNavigate}
           className={cn(
-            "flex-1 flex items-start gap-1.5 px-1.5 py-1.5 rounded-md text-[12px] transition-all duration-150 min-w-0",
+            "flex-1 flex items-start gap-1.5 px-1.5 py-1.5 rounded-md text-[12px] transition-all duration-200 min-w-0",
             isActive
               ? "bg-primary/10 text-primary font-medium shadow-sm"
-              : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:translate-x-0.5"
           )}
         >
           <LessonIcon
             className={cn(
-              "h-3.5 w-3.5 shrink-0",
+              "h-3.5 w-3.5 shrink-0 transition-colors duration-200",
               isActive ? "text-primary" : "text-muted-foreground/50"
             )}
           />
@@ -450,33 +473,38 @@ function LessonItem({
       </div>
 
       {/* Sub-lessons */}
-      {expanded && hasSubLessons && (
-        <div className="ml-5 pl-2.5 border-l border-sidebar-border/40 space-y-px mt-0.5 mb-1">
-          {lesson.subLessons.map((sub) => {
-            const active = isSubLessonActive(lesson, sub.slug);
-            return (
-              <Link
-                key={sub.slug}
-                to={subLessonUrl(lesson.slug, sub.slug)}
-                onClick={onNavigate}
-                className={cn(
-                  "flex items-start gap-1.5 px-2 py-1 rounded-md text-[11px] transition-all duration-150 min-w-0",
-                  active
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                )}
-              >
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full shrink-0",
-                    active ? "bg-primary" : "bg-muted-foreground/25"
-                  )}
-                />
-                <span className="break-words whitespace-normal leading-snug">{sub.title}</span>
-              </Link>
-            );
-          })}
-        </div>
+      {hasSubLessons && (
+        <Collapsible open={expanded} onOpenChange={() => onToggle(lesson.slug)}>
+          <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+            <div className="ml-5 pl-2.5 border-l border-sidebar-border/40 space-y-px mt-0.5 mb-1">
+              {lesson.subLessons.map((sub, i) => {
+                const active = isSubLessonActive(lesson, sub.slug);
+                return (
+                  <Link
+                    key={sub.slug}
+                    to={subLessonUrl(lesson.slug, sub.slug)}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex items-start gap-1.5 px-2 py-1 rounded-md text-[11px] transition-all duration-200 min-w-0 animate-fade-in",
+                      active
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground hover:translate-x-0.5"
+                    )}
+                    style={{ animationDelay: `${i * 25}ms`, animationFillMode: "backwards" }}
+                  >
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full shrink-0 mt-1 transition-all duration-200",
+                        active ? "bg-primary scale-125" : "bg-muted-foreground/25"
+                      )}
+                    />
+                    <span className="break-words whitespace-normal leading-snug">{sub.title}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       )}
     </div>
   );
