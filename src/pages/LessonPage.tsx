@@ -130,6 +130,7 @@ export default function LessonPage() {
                 hints={lesson.hints}
                 answerExplanation={lesson.answerExplanation}
                 validationRules={lesson.interactiveTask.validationRules}
+                lessonSlug={lesson.slug}
               />
             ) : (
               <InteractiveLesson

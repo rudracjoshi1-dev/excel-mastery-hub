@@ -12,7 +12,7 @@ import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
 
 // Icons for custom toolbar
-import { ArrowUpDown, Info } from "lucide-react";
+import { ArrowUpDown, Info, Maximize2 } from "lucide-react";
 
 export interface SheetData {
   id?: string;
@@ -29,6 +29,8 @@ export interface UniverSpreadsheetProps {
   height?: string | number;
   /** Whether the spreadsheet is read-only */
   readOnly?: boolean;
+  /** Lesson slug for "Open in Full Mode" link */
+  lessonSlug?: string;
   /** Callback when data changes */
   onChange?: (data: SheetData) => void;
 }
@@ -65,7 +67,7 @@ export function arrayToCellData(data: string[][]): Record<number, Record<number,
  * Supports keyboard navigation, formulas, copy/paste, drag fill, sorting
  */
 export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsheetProps>(
-  ({ initialData, height = 400, readOnly = false, onChange }, ref) => {
+  ({ initialData, height = 400, readOnly = false, lessonSlug, onChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const univerAPIRef = useRef<FUniver | null>(null);
     const univerInstanceRef = useRef<any>(null);
@@ -225,6 +227,21 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           <span className="text-xs text-muted-foreground">
             Use formulas like <code className="bg-muted px-1 rounded">=SUM(A1:A5)</code>
           </span>
+          
+          {lessonSlug && (
+            <>
+              <div className="h-3 w-px bg-border" />
+              <a
+                href={`/sheet?lesson=${lessonSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors font-medium ml-auto"
+              >
+                <Maximize2 className="h-3 w-3" />
+                <span>Open Full Mode</span>
+              </a>
+            </>
+          )}
         </div>
         
         {/* Spreadsheet Container */}
