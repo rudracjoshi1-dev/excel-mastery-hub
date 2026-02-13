@@ -28,6 +28,7 @@ interface UniverInteractiveLessonProps {
   hints: string[];
   answerExplanation: string;
   validationRules: string[];
+  lessonSlug?: string;
 }
 
 // Default validation function - can be swapped per lesson
@@ -131,6 +132,7 @@ export function UniverInteractiveLesson({
   hints,
   answerExplanation,
   validationRules,
+  lessonSlug,
 }: UniverInteractiveLessonProps) {
   const spreadsheetRef = useRef<UniverSpreadsheetRef>(null);
   const modelSpreadsheetRef = useRef<UniverSpreadsheetRef>(null);
@@ -225,6 +227,7 @@ export function UniverInteractiveLesson({
             ref={spreadsheetRef}
             initialData={initialSheetData}
             height={450}
+            lessonSlug={lessonSlug}
           />
         )}
       </div>
