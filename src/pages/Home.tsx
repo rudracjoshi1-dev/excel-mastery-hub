@@ -7,7 +7,7 @@ import { ArrowRight, BookOpen, Target, Users, CheckCircle, FileSpreadsheet, BarC
 import { getAllLessons } from "@/data/lessons";
 
 const features = [
-  { icon: BookOpen, title: "10 Structured Lessons", description: "From complete beginner to confident user" },
+  { icon: BookOpen, title: "75+ Structured Lessons", description: "From complete beginner to confident user" },
   { icon: Target, title: "Interactive Tasks", description: "Practice with hands-on spreadsheet exercises" },
   { icon: Users, title: "Beginner Friendly", description: "No prior experience required" },
   { icon: CheckCircle, title: "Real-World Examples", description: "Learn skills you'll actually use" },
@@ -98,7 +98,7 @@ export default function Home() {
 
           <div className="text-center mt-8">
             <Button asChild variant="outline" size="lg">
-              <Link to="/learn">View All 10 Lessons</Link>
+              <Link to="/learn">View All Lessons</Link>
             </Button>
           </div>
         </div>
