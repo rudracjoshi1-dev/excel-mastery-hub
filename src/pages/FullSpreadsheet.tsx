@@ -14,6 +14,7 @@ import "@univerjs/sheets-sort-ui/lib/index.css";
 
 import { lessons } from "@/data/lessons";
 import { arrayToCellData } from "@/components/lessons/UniverSpreadsheet";
+import { getLessonByPath, shouldLoadHeavyPlugins } from "@/data/allLessons";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -33,9 +34,16 @@ export default function FullSpreadsheet() {
   const univerAPIRef = useRef<FUniver | null>(null);
   const isInitializedRef = useRef(false);
 
-  // Find lesson data if a lesson slug is provided
+  // Find lesson metadata for plugin gating
+  const lessonMeta = useMemo(() => {
+    if (!lessonSlug) return null;
+    return getLessonByPath(lessonSlug) ?? null;
+  }, [lessonSlug]);
+
+  // Find lesson data if a lesson slug is provided (legacy lookup)
   const lessonData = useMemo(() => {
     if (!lessonSlug) return null;
+    // Try the slug directly (top-level lesson)
     return lessons.find((l) => l.slug === lessonSlug) ?? null;
   }, [lessonSlug]);
 
@@ -86,13 +94,22 @@ export default function FullSpreadsheet() {
     univer.registerPlugin(UniverSheetsSortPlugin);
     univer.registerPlugin(UniverSheetsSortUIPlugin);
 
-    // === FUTURE: Heavy plugins go here ===
-    // They will be dynamically imported and registered only on this page.
-    // Example (not yet active):
-    //   const { UniverSheetsFilterPlugin } = await import("@univerjs/sheets-filter");
-    //   const { UniverSheetsFilterUIPlugin } = await import("@univerjs/sheets-filter-ui");
-    //   univer.registerPlugin(UniverSheetsFilterPlugin);
-    //   univer.registerPlugin(UniverSheetsFilterUIPlugin);
+    // === Phase-based heavy plugin gating ===
+    // Heavy plugins (filter, conditional formatting, pivot tables) are ONLY
+    // registered for Phase 6–7 lessons. This prevents DI conflicts and
+    // keeps the bundle lightweight for beginner lessons.
+    const phase = lessonMeta?.phase ?? 0;
+    if (shouldLoadHeavyPlugins(phase)) {
+      // FUTURE: Dynamically import and register heavy plugins here.
+      // Example (not yet active):
+      //   const { UniverSheetsFilterPlugin } = await import("@univerjs/sheets-filter");
+      //   const { UniverSheetsFilterUIPlugin } = await import("@univerjs/sheets-filter-ui");
+      //   univer.registerPlugin(UniverSheetsFilterPlugin);
+      //   univer.registerPlugin(UniverSheetsFilterUIPlugin);
+      console.log(`[FullSpreadsheet] Phase ${phase}: heavy plugins eligible (not yet loaded)`);
+    } else {
+      console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
+    }
 
     univerAPIRef.current = univerAPI;
     univerAPI.createWorkbook(workbookData);
@@ -117,11 +134,11 @@ export default function FullSpreadsheet() {
         )}
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-semibold text-sm truncate">
-            {lessonData?.title ?? "Full Spreadsheet"}
+            {lessonMeta?.title ?? lessonData?.title ?? "Full Spreadsheet"}
           </span>
-          {lessonData && (
+          {lessonMeta && (
             <span className="text-xs text-muted-foreground shrink-0">
-              — Full Mode
+              — Phase {lessonMeta.phase} · {shouldLoadHeavyPlugins(lessonMeta.phase) ? "Advanced Mode" : "Standard Mode"}
             </span>
           )}
         </div>
