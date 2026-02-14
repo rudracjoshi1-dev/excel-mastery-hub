@@ -30,6 +30,7 @@ const App = () => (
           <Route path="/" element={<Home />} />
           <Route path="/learn" element={<Learn />} />
           <Route path="/learn/:slug" element={<LessonPage />} />
+          <Route path="/learn/:slug/:subSlug" element={<LessonPage />} />
           <Route path="/sheet" element={<Suspense fallback={<div className="flex items-center justify-center h-screen">Loading spreadsheet…</div>}><FullSpreadsheet /></Suspense>} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/categories/:category" element={<CategoryPage />} />
