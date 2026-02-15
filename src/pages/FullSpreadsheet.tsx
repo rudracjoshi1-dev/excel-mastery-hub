@@ -11,7 +11,7 @@ import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
 import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
-// Filter preset is dynamically imported for Phase 6+ lessons only
+// Filter plugins are dynamically imported for Phase 6+ lessons only
 
 import { lessons } from "@/data/lessons";
 import { arrayToCellData } from "@/components/lessons/UniverSpreadsheet";
@@ -82,7 +82,7 @@ export default function FullSpreadsheet() {
     const phase = lessonMeta?.phase ?? 0;
 
     async function init() {
-      // Build presets array — filter preset added dynamically for Phase 6+
+      // Build presets array — filter preset conditionally added for Phase 6+
       const presets: any[] = [
         UniverSheetsCorePreset({ container }),
       ];
@@ -92,9 +92,9 @@ export default function FullSpreadsheet() {
         SheetsSortUIEnUS,
       ];
 
+      // === Phase-based: load filter preset dynamically for Phase 6–7 ===
       if (shouldLoadHeavyPlugins(phase)) {
         try {
-          // Dynamic imports — code-split into separate chunks
           const [filterPresetMod, filterLocaleMod] = await Promise.all([
             import("@univerjs/preset-sheets-filter"),
             import("@univerjs/preset-sheets-filter/locales/en-US"),
