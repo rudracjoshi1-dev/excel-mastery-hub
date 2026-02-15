@@ -122,6 +122,9 @@ export default function FullSpreadsheet() {
             import("@univerjs/sheets-filter-ui"),
           ]);
 
+          // Load filter UI styles — without this, toolbar buttons are invisible
+          await import("@univerjs/sheets-filter-ui/lib/index.css");
+
           // Register core before UI to satisfy DI dependencies
           // Cast needed due to multiple @univerjs/core versions in node_modules
           univer.registerPlugin(filterCoreMod.UniverSheetsFilterPlugin as any);
