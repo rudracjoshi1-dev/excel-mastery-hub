@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
@@ -77,45 +77,73 @@ export default function FullSpreadsheet() {
     if (!containerRef.current || isInitializedRef.current) return;
     isInitializedRef.current = true;
 
-    const mergedLocales = mergeLocales(
-      UniverPresetSheetsCoreEnUS,
-      SheetsSortUIEnUS
-    );
-
-    const { univerAPI, univer } = createUniver({
-      locale: LocaleType.EN_US,
-      locales: { [LocaleType.EN_US]: mergedLocales },
-      presets: [
-        UniverSheetsCorePreset({ container: containerRef.current }),
-      ],
-    });
-
-    // Register plugins in safe order: core deps first, then UI
-    univer.registerPlugin(UniverSheetsSortPlugin);
-    univer.registerPlugin(UniverSheetsSortUIPlugin);
-
-    // === Phase-based heavy plugin gating ===
-    // Heavy plugins (filter, conditional formatting, pivot tables) are ONLY
-    // registered for Phase 6–7 lessons. This prevents DI conflicts and
-    // keeps the bundle lightweight for beginner lessons.
+    const container = containerRef.current;
     const phase = lessonMeta?.phase ?? 0;
-    if (shouldLoadHeavyPlugins(phase)) {
-      // FUTURE: Dynamically import and register heavy plugins here.
-      // Example (not yet active):
-      //   const { UniverSheetsFilterPlugin } = await import("@univerjs/sheets-filter");
-      //   const { UniverSheetsFilterUIPlugin } = await import("@univerjs/sheets-filter-ui");
-      //   univer.registerPlugin(UniverSheetsFilterPlugin);
-      //   univer.registerPlugin(UniverSheetsFilterUIPlugin);
-      console.log(`[FullSpreadsheet] Phase ${phase}: heavy plugins eligible (not yet loaded)`);
-    } else {
-      console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
+
+    async function init() {
+      // Dynamically load filter locale if Phase 6+
+      let filterLocale: Record<string, any> | null = null;
+      if (shouldLoadHeavyPlugins(phase)) {
+        try {
+          const mod = await import("@univerjs/sheets-filter-ui/locale/en-US");
+          filterLocale = mod.default ?? mod;
+        } catch (e) {
+          console.error("[FullSpreadsheet] Failed to load filter locale:", e);
+        }
+      }
+
+      const localesToMerge: Record<string, any>[] = [
+        UniverPresetSheetsCoreEnUS,
+        SheetsSortUIEnUS,
+      ];
+      if (filterLocale) localesToMerge.push(filterLocale);
+
+      const finalLocales = mergeLocales(...localesToMerge);
+
+      const { univerAPI, univer } = createUniver({
+        locale: LocaleType.EN_US,
+        locales: { [LocaleType.EN_US]: finalLocales },
+        presets: [
+          UniverSheetsCorePreset({ container }),
+        ],
+      });
+
+      // Register plugins in safe order: core deps first, then UI
+      univer.registerPlugin(UniverSheetsSortPlugin);
+      univer.registerPlugin(UniverSheetsSortUIPlugin);
+
+      // === Phase-based heavy plugin gating ===
+      // Filter plugins are ONLY registered for Phase 6–7 lessons.
+      if (shouldLoadHeavyPlugins(phase)) {
+        try {
+          // Dynamic imports — code-split into separate chunks
+          const [filterCoreMod, filterUIMod] = await Promise.all([
+            import("@univerjs/sheets-filter"),
+            import("@univerjs/sheets-filter-ui"),
+          ]);
+
+          // Register core before UI to satisfy DI dependencies
+          // Cast needed due to multiple @univerjs/core versions in node_modules
+          univer.registerPlugin(filterCoreMod.UniverSheetsFilterPlugin as any);
+          univer.registerPlugin(filterUIMod.UniverSheetsFilterUIPlugin as any);
+
+          console.log(`[FullSpreadsheet] Phase ${phase}: filter plugins loaded successfully`);
+        } catch (e) {
+          console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter plugins:`, e);
+          // App continues without filters — non-fatal
+        }
+      } else {
+        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
+      }
+
+      univerAPIRef.current = univerAPI;
+      univerAPI.createWorkbook(workbookData);
     }
 
-    univerAPIRef.current = univerAPI;
-    univerAPI.createWorkbook(workbookData);
+    init();
 
     return () => {
-      univerAPI.dispose();
+      univerAPIRef.current?.dispose();
       isInitializedRef.current = false;
     };
   }, []); // Mount once
