@@ -6,11 +6,12 @@ import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
 import type { FUniver } from "@univerjs/presets";
 import "@univerjs/preset-sheets-core/lib/index.css";
 
-// Sorting plugin (stable)
+// Sorting plugins (stable — registered manually, no preset available)
 import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
 import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
+// Filter preset is dynamically imported for Phase 6+ lessons only
 
 import { lessons } from "@/data/lessons";
 import { arrayToCellData } from "@/components/lessons/UniverSpreadsheet";
@@ -81,63 +82,47 @@ export default function FullSpreadsheet() {
     const phase = lessonMeta?.phase ?? 0;
 
     async function init() {
-      // Dynamically load filter locale if Phase 6+
-      let filterLocale: Record<string, any> | null = null;
-      if (shouldLoadHeavyPlugins(phase)) {
-        try {
-          const mod = await import("@univerjs/sheets-filter-ui/locale/en-US");
-          filterLocale = mod.default ?? mod;
-        } catch (e) {
-          console.error("[FullSpreadsheet] Failed to load filter locale:", e);
-        }
-      }
+      // Build presets array — filter preset added dynamically for Phase 6+
+      const presets: any[] = [
+        UniverSheetsCorePreset({ container }),
+      ];
 
       const localesToMerge: Record<string, any>[] = [
         UniverPresetSheetsCoreEnUS,
         SheetsSortUIEnUS,
       ];
-      if (filterLocale) localesToMerge.push(filterLocale);
+
+      if (shouldLoadHeavyPlugins(phase)) {
+        try {
+          // Dynamic imports — code-split into separate chunks
+          const [filterPresetMod, filterLocaleMod] = await Promise.all([
+            import("@univerjs/preset-sheets-filter"),
+            import("@univerjs/preset-sheets-filter/locales/en-US"),
+          ]);
+          await import("@univerjs/preset-sheets-filter/lib/index.css");
+
+          presets.push(filterPresetMod.UniverSheetsFilterPreset());
+          localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
+
+          console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
+        } catch (e) {
+          console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter preset:`, e);
+        }
+      } else {
+        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
+      }
 
       const finalLocales = mergeLocales(...localesToMerge);
 
       const { univerAPI, univer } = createUniver({
         locale: LocaleType.EN_US,
         locales: { [LocaleType.EN_US]: finalLocales },
-        presets: [
-          UniverSheetsCorePreset({ container }),
-        ],
+        presets,
       });
 
-      // Register plugins in safe order: core deps first, then UI
+      // Register sorting plugins (stable, always available)
       univer.registerPlugin(UniverSheetsSortPlugin);
       univer.registerPlugin(UniverSheetsSortUIPlugin);
-
-      // === Phase-based heavy plugin gating ===
-      // Filter plugins are ONLY registered for Phase 6–7 lessons.
-      if (shouldLoadHeavyPlugins(phase)) {
-        try {
-          // Dynamic imports — code-split into separate chunks
-          const [filterCoreMod, filterUIMod] = await Promise.all([
-            import("@univerjs/sheets-filter"),
-            import("@univerjs/sheets-filter-ui"),
-          ]);
-
-          // Load filter UI styles — without this, toolbar buttons are invisible
-          await import("@univerjs/sheets-filter-ui/lib/index.css");
-
-          // Register core before UI to satisfy DI dependencies
-          // Cast needed due to multiple @univerjs/core versions in node_modules
-          univer.registerPlugin(filterCoreMod.UniverSheetsFilterPlugin as any);
-          univer.registerPlugin(filterUIMod.UniverSheetsFilterUIPlugin as any);
-
-          console.log(`[FullSpreadsheet] Phase ${phase}: filter plugins loaded successfully`);
-        } catch (e) {
-          console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter plugins:`, e);
-          // App continues without filters — non-fatal
-        }
-      } else {
-        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
-      }
 
       univerAPIRef.current = univerAPI;
       univerAPI.createWorkbook(workbookData);
