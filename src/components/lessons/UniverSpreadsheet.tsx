@@ -47,6 +47,8 @@ export interface UniverSpreadsheetRef {
   endEditing: () => Promise<void>;
   /** Reset the spreadsheet to initial data */
   reset: () => void;
+  /** Prevent saving on next unmount (used before reset remount) */
+  skipNextSave: () => void;
 }
 
 /**
@@ -76,6 +78,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     const univerInstanceRef = useRef<any>(null);
     const isInitializedRef = useRef(false);
     const initialDataRef = useRef(initialData);
+    const skipSaveRef = useRef(false);
 
     // Update initial data ref when prop changes
     initialDataRef.current = initialData;
@@ -120,19 +123,16 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         const sheet = workbook.getActiveSheet();
         if (!sheet) return;
         
-        // Clear existing data and restore initial data
         const rowCount = initialDataRef.current.rowCount || 20;
         const colCount = initialDataRef.current.columnCount || 10;
         const range = sheet.getRange(0, 0, rowCount, colCount);
         
         try {
-          // Clear all cells first
           const clearData: (string | null)[][] = Array(rowCount).fill(null).map(() => 
             Array(colCount).fill(null)
           );
           range.setValues(clearData);
           
-          // Restore initial data
           if (initialDataRef.current.cellData) {
             Object.entries(initialDataRef.current.cellData).forEach(([rowStr, rowData]) => {
               const rowIndex = parseInt(rowStr);
@@ -146,13 +146,17 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
             });
           }
 
-          // Clear persisted snapshot so it reloads default next time
           if (lessonSlug) {
             clearWorkbookSnapshot(lessonSlug);
+            console.log(`[UniverSpreadsheet] Cleared snapshot for "${lessonSlug}".`);
           }
         } catch (e) {
           console.error("Error resetting spreadsheet:", e);
         }
+      },
+      skipNextSave: () => {
+        skipSaveRef.current = true;
+        console.log(`[UniverSpreadsheet] skipNextSave flagged for "${lessonSlug}".`);
       },
     }));
 
@@ -187,12 +191,19 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       univerAPIRef.current = univerAPI;
       univerInstanceRef.current = univer;
 
-      // Try loading persisted snapshot first
+      // Persistence: check localStorage for saved snapshot
+      if (!lessonSlug) {
+        console.warn(`[UniverSpreadsheet] No lessonSlug provided — persistence disabled.`);
+      }
+
+      const storageKey = lessonSlug ? `univer-workbook-${lessonSlug}` : null;
+      console.log(`[UniverSpreadsheet] lessonSlug="${lessonSlug}", storageKey="${storageKey}"`);
+
       const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
 
       if (savedSnapshot) {
         univerAPI.createWorkbook(savedSnapshot);
-        console.log(`[UniverSpreadsheet] Restored saved workbook for "${lessonSlug}".`);
+        console.log(`[UniverSpreadsheet] Loaded snapshot from localStorage for "${lessonSlug}".`);
       } else {
         // Create initial workbook with default data
         const workbookData = {
@@ -211,15 +222,20 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           },
         };
         univerAPI.createWorkbook(workbookData);
+        console.log(`[UniverSpreadsheet] Loaded default data (no snapshot) for "${lessonSlug}".`);
       }
 
       return () => {
-        // Save snapshot before disposing
-        if (lessonSlug && univerAPIRef.current) {
+        // Save snapshot before disposing — unless skipSave was flagged (reset flow)
+        if (lessonSlug && univerAPIRef.current && !skipSaveRef.current) {
           saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
+          console.log(`[UniverSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
+        } else if (skipSaveRef.current) {
+          console.log(`[UniverSpreadsheet] Skipped save on unmount (reset) for "${lessonSlug}".`);
         }
         univerAPI.dispose();
         isInitializedRef.current = false;
+        skipSaveRef.current = false;
       };
     }, []); // Empty deps - only run once on mount
 

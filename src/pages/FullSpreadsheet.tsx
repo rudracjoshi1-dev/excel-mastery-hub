@@ -77,6 +77,14 @@ export default function FullSpreadsheet() {
 
   useEffect(() => {
     if (!containerRef.current || isInitializedRef.current) return;
+
+    if (!lessonSlug) {
+      console.warn(`[FullSpreadsheet] No lessonSlug in query params — persistence disabled.`);
+    }
+
+    const storageKey = lessonSlug ? `univer-workbook-${lessonSlug}` : null;
+    console.log(`[FullSpreadsheet] lessonSlug="${lessonSlug}", storageKey="${storageKey}"`);
+
     isInitializedRef.current = true;
 
     const container = containerRef.current;
@@ -132,9 +140,10 @@ export default function FullSpreadsheet() {
 
       if (savedSnapshot) {
         univerAPI.createWorkbook(savedSnapshot);
-        console.log(`[FullSpreadsheet] Restored saved workbook for "${lessonSlug}".`);
+        console.log(`[FullSpreadsheet] Loaded snapshot from localStorage for "${lessonSlug}".`);
       } else {
         univerAPI.createWorkbook(workbookData);
+        console.log(`[FullSpreadsheet] Loaded default data (no snapshot) for "${lessonSlug}".`);
       }
     }
 
@@ -144,6 +153,7 @@ export default function FullSpreadsheet() {
       // Save snapshot before disposing
       if (lessonSlug && univerAPIRef.current) {
         saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
+        console.log(`[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
       }
       univerAPIRef.current?.dispose();
       isInitializedRef.current = false;

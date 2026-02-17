@@ -14,6 +14,7 @@ import {
   SheetData, 
   arrayToCellData 
 } from "./UniverSpreadsheet";
+import { clearWorkbookSnapshot } from "@/lib/workbookPersistence";
 
 interface ValidationResult {
   status: "correct" | "partial" | "incorrect";
@@ -179,10 +180,17 @@ export function UniverInteractiveLesson({
   }, [expectedResult, validationRules]);
 
   const handleReset = useCallback(() => {
+    // Tell the current spreadsheet to skip saving on unmount
+    spreadsheetRef.current?.skipNextSave();
+    // Clear the persisted snapshot so the fresh mount loads defaults
+    if (lessonSlug) {
+      clearWorkbookSnapshot(lessonSlug);
+      console.log(`[UniverInteractiveLesson] Cleared snapshot for "${lessonSlug}" before reset.`);
+    }
     setShowModelAnswer(false);
     setValidationResult(null);
     setKey(prev => prev + 1); // Force re-mount of spreadsheet
-  }, []);
+  }, [lessonSlug]);
 
   const handleRevealAnswer = useCallback(() => {
     setShowModelAnswer(true);
