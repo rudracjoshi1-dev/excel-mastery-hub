@@ -16,6 +16,7 @@ import "@univerjs/sheets-sort-ui/lib/index.css";
 import { lessons } from "@/data/lessons";
 import { arrayToCellData } from "@/components/lessons/UniverSpreadsheet";
 import { getLessonByPath, shouldLoadHeavyPlugins } from "@/data/allLessons";
+import { loadWorkbookSnapshot, saveWorkbookSnapshot } from "@/lib/workbookPersistence";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -125,12 +126,25 @@ export default function FullSpreadsheet() {
       univer.registerPlugin(UniverSheetsSortUIPlugin);
 
       univerAPIRef.current = univerAPI;
-      univerAPI.createWorkbook(workbookData);
+
+      // Try loading persisted snapshot first
+      const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
+
+      if (savedSnapshot) {
+        univerAPI.createWorkbook(savedSnapshot);
+        console.log(`[FullSpreadsheet] Restored saved workbook for "${lessonSlug}".`);
+      } else {
+        univerAPI.createWorkbook(workbookData);
+      }
     }
 
     init();
 
     return () => {
+      // Save snapshot before disposing
+      if (lessonSlug && univerAPIRef.current) {
+        saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
+      }
       univerAPIRef.current?.dispose();
       isInitializedRef.current = false;
     };

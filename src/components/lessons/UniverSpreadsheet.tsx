@@ -11,6 +11,9 @@ import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
 
+// Persistence
+import { loadWorkbookSnapshot, saveWorkbookSnapshot, clearWorkbookSnapshot } from "@/lib/workbookPersistence";
+
 // Icons for custom toolbar
 import { ArrowUpDown, Info, Maximize2 } from "lucide-react";
 
@@ -142,6 +145,11 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               });
             });
           }
+
+          // Clear persisted snapshot so it reloads default next time
+          if (lessonSlug) {
+            clearWorkbookSnapshot(lessonSlug);
+          }
         } catch (e) {
           console.error("Error resetting spreadsheet:", e);
         }
@@ -179,26 +187,37 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       univerAPIRef.current = univerAPI;
       univerInstanceRef.current = univer;
 
-      // Create initial workbook with data
-      const workbookData = {
-        id: initialData?.id || "workbook-1",
-        sheetOrder: ["sheet-1"],
-        name: "Workbook",
-        appVersion: "1.0.0",
-        sheets: {
-          "sheet-1": {
-            id: "sheet-1",
-            name: initialData?.name || "Sheet1",
-            rowCount: initialData?.rowCount || 20,
-            columnCount: initialData?.columnCount || 10,
-            cellData: initialData?.cellData || {},
-          },
-        },
-      };
+      // Try loading persisted snapshot first
+      const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
 
-      univerAPI.createWorkbook(workbookData);
+      if (savedSnapshot) {
+        univerAPI.createWorkbook(savedSnapshot);
+        console.log(`[UniverSpreadsheet] Restored saved workbook for "${lessonSlug}".`);
+      } else {
+        // Create initial workbook with default data
+        const workbookData = {
+          id: initialData?.id || "workbook-1",
+          sheetOrder: ["sheet-1"],
+          name: "Workbook",
+          appVersion: "1.0.0",
+          sheets: {
+            "sheet-1": {
+              id: "sheet-1",
+              name: initialData?.name || "Sheet1",
+              rowCount: initialData?.rowCount || 20,
+              columnCount: initialData?.columnCount || 10,
+              cellData: initialData?.cellData || {},
+            },
+          },
+        };
+        univerAPI.createWorkbook(workbookData);
+      }
 
       return () => {
+        // Save snapshot before disposing
+        if (lessonSlug && univerAPIRef.current) {
+          saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
+        }
         univerAPI.dispose();
         isInitializedRef.current = false;
       };
