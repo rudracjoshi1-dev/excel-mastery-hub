@@ -75,90 +75,94 @@ export default function FullSpreadsheet() {
     };
   }, [lessonData]);
 
-  useEffect(() => {
-    if (!containerRef.current || isInitializedRef.current) return;
+ useEffect(() => {
+  if (!containerRef.current) return;
 
-    if (!lessonSlug) {
-      console.warn(`[FullSpreadsheet] No lessonSlug in query params — persistence disabled.`);
+  // Dispose any existing instance first (prevents mirroring / duplicate data)
+  if (univerAPIRef.current) {
+    univerAPIRef.current.dispose();
+    univerAPIRef.current = null;
+    isInitializedRef.current = false;
+  }
+
+  isInitializedRef.current = true;
+
+  const container = containerRef.current;
+  const phase = lessonMeta?.phase ?? 0;
+
+  async function init() {
+    // Build presets array — filter preset conditionally added for Phase 6+
+    const presets: any[] = [UniverSheetsCorePreset({ container })];
+
+    const localesToMerge: Record<string, any>[] = [
+      UniverPresetSheetsCoreEnUS,
+      SheetsSortUIEnUS,
+    ];
+
+    // === Phase-based: load filter preset dynamically for Phase 6–7 ===
+    if (shouldLoadHeavyPlugins(phase)) {
+      try {
+        const [filterPresetMod, filterLocaleMod] = await Promise.all([
+          import("@univerjs/preset-sheets-filter"),
+          import("@univerjs/preset-sheets-filter/locales/en-US"),
+        ]);
+        await import("@univerjs/preset-sheets-filter/lib/index.css");
+
+        presets.push(filterPresetMod.UniverSheetsFilterPreset());
+        localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
+
+        console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
+      } catch (e) {
+        console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter preset:`, e);
+      }
+    } else {
+      console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
     }
 
-    const storageKey = lessonSlug ? `univer-workbook-${lessonSlug}` : null;
-    console.log(`[FullSpreadsheet] lessonSlug="${lessonSlug}", storageKey="${storageKey}"`);
+    const finalLocales = mergeLocales(...localesToMerge);
 
-    isInitializedRef.current = true;
+    const { univerAPI, univer } = createUniver({
+      locale: LocaleType.EN_US,
+      locales: { [LocaleType.EN_US]: finalLocales },
+      presets,
+    });
 
-    const container = containerRef.current;
-    const phase = lessonMeta?.phase ?? 0;
+    // Register stable sorting plugins
+    univer.registerPlugin(UniverSheetsSortPlugin);
+    univer.registerPlugin(UniverSheetsSortUIPlugin);
 
-    async function init() {
-      // Build presets array — filter preset conditionally added for Phase 6+
-      const presets: any[] = [
-        UniverSheetsCorePreset({ container }),
-      ];
+    univerAPIRef.current = univerAPI;
+    univerInstanceRef.current = univer;
 
-      const localesToMerge: Record<string, any>[] = [
-        UniverPresetSheetsCoreEnUS,
-        SheetsSortUIEnUS,
-      ];
+    // Load per-lesson snapshot
+    const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
 
-      // === Phase-based: load filter preset dynamically for Phase 6–7 ===
-      if (shouldLoadHeavyPlugins(phase)) {
-        try {
-          const [filterPresetMod, filterLocaleMod] = await Promise.all([
-            import("@univerjs/preset-sheets-filter"),
-            import("@univerjs/preset-sheets-filter/locales/en-US"),
-          ]);
-          await import("@univerjs/preset-sheets-filter/lib/index.css");
+    if (savedSnapshot) {
+      univerAPI.createWorkbook(savedSnapshot);
+      console.log(`[FullSpreadsheet] Loaded snapshot from localStorage for "${lessonSlug}".`);
+    } else {
+      univerAPI.createWorkbook(workbookData);
+      console.log(`[FullSpreadsheet] Loaded default data (no snapshot) for "${lessonSlug}".`);
+    }
+  }
 
-          presets.push(filterPresetMod.UniverSheetsFilterPreset());
-          localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
+  init();
 
-          console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
-        } catch (e) {
-          console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter preset:`, e);
-        }
-      } else {
-        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
-      }
-
-      const finalLocales = mergeLocales(...localesToMerge);
-
-      const { univerAPI, univer } = createUniver({
-        locale: LocaleType.EN_US,
-        locales: { [LocaleType.EN_US]: finalLocales },
-        presets,
-      });
-
-      // Register sorting plugins (stable, always available)
-      univer.registerPlugin(UniverSheetsSortPlugin);
-      univer.registerPlugin(UniverSheetsSortUIPlugin);
-
-      univerAPIRef.current = univerAPI;
-
-      // Try loading persisted snapshot first
-      const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
-
-      if (savedSnapshot) {
-        univerAPI.createWorkbook(savedSnapshot);
-        console.log(`[FullSpreadsheet] Loaded snapshot from localStorage for "${lessonSlug}".`);
-      } else {
-        univerAPI.createWorkbook(workbookData);
-        console.log(`[FullSpreadsheet] Loaded default data (no snapshot) for "${lessonSlug}".`);
-      }
+  return () => {
+    // Save snapshot before disposing
+    if (lessonSlug && univerAPIRef.current) {
+      saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
+      console.log(`[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
     }
 
-    init();
+    // Dispose both Univer API and instance to fully clean up
+    univerAPIRef.current?.dispose();
+    univerInstanceRef.current?.dispose();
 
-    return () => {
-      // Save snapshot before disposing
-      if (lessonSlug && univerAPIRef.current) {
-        saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
-        console.log(`[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
-      }
-      univerAPIRef.current?.dispose();
-      isInitializedRef.current = false;
-    };
-  }, []); // Mount once
+    isInitializedRef.current = false;
+  };
+}, [lessonSlug, lessonMeta, workbookData]);
+
 
   return (
     <div className="flex flex-col h-screen bg-background">
