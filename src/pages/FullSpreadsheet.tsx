@@ -34,6 +34,7 @@ export default function FullSpreadsheet() {
   const lessonSlug = searchParams.get("lesson");
   const containerRef = useRef<HTMLDivElement>(null);
   const univerAPIRef = useRef<FUniver | null>(null);
+  const univerInstanceRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
 
   // Find lesson metadata for plugin gating
