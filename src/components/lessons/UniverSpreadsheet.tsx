@@ -160,84 +160,71 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       },
     }));
 
-    useEffect(() => {
-      if (!containerRef.current || isInitializedRef.current) return;
-      
-      isInitializedRef.current = true;
+useEffect(() => {
+  if (!containerRef.current) return;
 
-      // Merge locales for i18n support
-      const mergedLocales = mergeLocales(
-        UniverPresetSheetsCoreEnUS,
-        SheetsSortUIEnUS
-      );
+  // Dispose old instance if it exists
+  if (univerAPIRef.current) {
+    univerAPIRef.current.dispose();
+    univerAPIRef.current = null;
+    univerInstanceRef.current?.dispose();
+    univerInstanceRef.current = null;
+    isInitializedRef.current = false;
+    skipSaveRef.current = false;
+  }
 
-      // Create Univer instance with sheets preset
-      const { univerAPI, univer } = createUniver({
-        locale: LocaleType.EN_US,
-        locales: {
-          [LocaleType.EN_US]: mergedLocales,
+  isInitializedRef.current = true;
+
+  const mergedLocales = mergeLocales(UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS);
+
+  const { univerAPI, univer } = createUniver({
+    locale: LocaleType.EN_US,
+    locales: { [LocaleType.EN_US]: mergedLocales },
+    presets: [
+      UniverSheetsCorePreset({ container: containerRef.current }),
+    ],
+  });
+
+  univer.registerPlugin(UniverSheetsSortPlugin);
+  univer.registerPlugin(UniverSheetsSortUIPlugin);
+
+  univerAPIRef.current = univerAPI;
+  univerInstanceRef.current = univer;
+
+  // Load persisted snapshot
+  const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
+  if (savedSnapshot) {
+    univerAPI.createWorkbook(savedSnapshot);
+  } else {
+    const workbookData = {
+      id: initialData?.id || "workbook-1",
+      sheetOrder: ["sheet-1"],
+      name: "Workbook",
+      appVersion: "1.0.0",
+      sheets: {
+        "sheet-1": {
+          id: "sheet-1",
+          name: initialData?.name || "Sheet1",
+          rowCount: initialData?.rowCount || 20,
+          columnCount: initialData?.columnCount || 10,
+          cellData: initialData?.cellData || {},
         },
-        presets: [
-          UniverSheetsCorePreset({
-            container: containerRef.current,
-          }),
-        ],
-      });
+      },
+    };
+    univerAPI.createWorkbook(workbookData);
+  }
 
-      // Register sorting plugins
-      univer.registerPlugin(UniverSheetsSortPlugin);
-      univer.registerPlugin(UniverSheetsSortUIPlugin);
+  return () => {
+    if (lessonSlug && univerAPIRef.current && !skipSaveRef.current) {
+      saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
+    }
+    univerAPIRef.current?.dispose();
+    univerInstanceRef.current?.dispose();
+    isInitializedRef.current = false;
+    skipSaveRef.current = false;
+  };
+}, [lessonSlug]);
 
-      univerAPIRef.current = univerAPI;
-      univerInstanceRef.current = univer;
-
-      // Persistence: check localStorage for saved snapshot
-      if (!lessonSlug) {
-        console.warn(`[UniverSpreadsheet] No lessonSlug provided — persistence disabled.`);
-      }
-
-      const storageKey = lessonSlug ? `univer-workbook-${lessonSlug}` : null;
-      console.log(`[UniverSpreadsheet] lessonSlug="${lessonSlug}", storageKey="${storageKey}"`);
-
-      const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
-
-      if (savedSnapshot) {
-        univerAPI.createWorkbook(savedSnapshot);
-        console.log(`[UniverSpreadsheet] Loaded snapshot from localStorage for "${lessonSlug}".`);
-      } else {
-        // Create initial workbook with default data
-        const workbookData = {
-          id: initialData?.id || "workbook-1",
-          sheetOrder: ["sheet-1"],
-          name: "Workbook",
-          appVersion: "1.0.0",
-          sheets: {
-            "sheet-1": {
-              id: "sheet-1",
-              name: initialData?.name || "Sheet1",
-              rowCount: initialData?.rowCount || 20,
-              columnCount: initialData?.columnCount || 10,
-              cellData: initialData?.cellData || {},
-            },
-          },
-        };
-        univerAPI.createWorkbook(workbookData);
-        console.log(`[UniverSpreadsheet] Loaded default data (no snapshot) for "${lessonSlug}".`);
-      }
-
-      return () => {
-        // Save snapshot before disposing — unless skipSave was flagged (reset flow)
-        if (lessonSlug && univerAPIRef.current && !skipSaveRef.current) {
-          saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
-          console.log(`[UniverSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
-        } else if (skipSaveRef.current) {
-          console.log(`[UniverSpreadsheet] Skipped save on unmount (reset) for "${lessonSlug}".`);
-        }
-        univerAPI.dispose();
-        isInitializedRef.current = false;
-        skipSaveRef.current = false;
-      };
-    }, []); // Empty deps - only run once on mount
 
     const containerHeight = typeof height === "number" ? `${height}px` : height;
     // Subtract toolbar height from container
