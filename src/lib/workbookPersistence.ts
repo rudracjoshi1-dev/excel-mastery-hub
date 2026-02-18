@@ -42,7 +42,7 @@ export function saveWorkbookSnapshot(lessonId: string, univerAPI: FUniver): bool
       console.warn(`[workbookPersistence] No active workbook to save for "${lessonId}".`);
       return false;
     }
-    const snapshot = (workbook as any).getSnapshot();
+    const snapshot = (workbook as any).save?.() ?? (workbook as any).getSnapshot();
     if (!snapshot) {
       console.warn(`[workbookPersistence] getSnapshot() returned null for "${lessonId}".`);
       return false;
