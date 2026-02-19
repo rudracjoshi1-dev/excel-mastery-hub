@@ -164,26 +164,6 @@ export default function FullSpreadsheet() {
   };
 }, [lessonSlug, lessonMeta, workbookData]);
 
-useEffect(() => {
-  if (!lessonSlug || !univerAPIRef.current) return;
-
-  const handleStorage = (e: StorageEvent) => {
-    const key = `univer-workbook-${lessonSlug}`;
-    if (e.key === key && e.newValue) {
-      try {
-        const snapshot = JSON.parse(e.newValue);
-        console.log(`[FullSpreadsheet] Detected updated snapshot from Embedded spreadsheet`);
-        univerAPIRef.current!.createWorkbook(snapshot);
-      } catch (err) {
-        console.error("Failed to parse workbook snapshot from storage event:", err);
-      }
-    }
-  };
-
-  window.addEventListener("storage", handleStorage);
-
-  return () => window.removeEventListener("storage", handleStorage);
-}, [lessonSlug]);
 
   return (
     <div className="flex flex-col h-screen bg-background">
