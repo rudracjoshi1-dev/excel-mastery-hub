@@ -79,7 +79,7 @@ export default function FullSpreadsheet() {
 useEffect(() => {
   if (!containerRef.current) return;
 
-  // Dispose any existing instance first
+  // Dispose existing instance if any
   if (univerAPIRef.current) {
     univerAPIRef.current.dispose();
     univerAPIRef.current = null;
@@ -130,40 +130,34 @@ useEffect(() => {
       univerAPIRef.current = univerAPI;
       univerInstanceRef.current = univer;
 
-      // --- Load snapshot or default workbook ---
+      // --- Load initial snapshot or default workbook ---
       const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
 
       if (savedSnapshot) {
         univerAPI.createWorkbook(savedSnapshot);
-        console.log("FULL → snapshot loaded");
+        console.log("FULL → snapshot loaded from localStorage");
       } else {
         univerAPI.createWorkbook(workbookData);
         console.log("FULL → default workbook loaded");
       }
 
-      // --- BroadcastChannel for real-time syncing ---
+      // --- BroadcastChannel sync ---
       const bc = new BroadcastChannel("univer-sync");
+
+      // Request latest snapshot from embedded
+      bc.postMessage({ type: "REQUEST_SNAPSHOT", lessonSlug });
+
+      // Listen for embedded responses or updates
       bc.onmessage = (ev) => {
-        if (ev.data.lessonSlug === lessonSlug && univerAPIRef.current) {
-          univerAPIRef.current.createWorkbook(ev.data.snapshot);
-          console.log(`[FullSpreadsheet] Received broadcast snapshot for "${lessonSlug}"`);
-        }
-      };
+        const { type, lessonSlug: msgSlug, snapshot } = ev.data;
+        if (msgSlug !== lessonSlug) return;
 
-      // Listen for workbook changes to broadcast to embedded sheets
-      const workbook = univerAPI.getActiveWorkbook();
-      workbook.onSnapshotChanged?.(() => {
-        const snapshot = univerAPIRef.current?.getWorkbookJSON();
-        if (snapshot) {
-          saveWorkbookSnapshot(lessonSlug!, univerAPIRef.current!);
-          bc.postMessage({ lessonSlug, snapshot });
-          console.log(`[FullSpreadsheet] Broadcast snapshot for "${lessonSlug}"`);
+        if (type === "RESPONSE_SNAPSHOT" || type === "UPDATE") {
+          if (univerAPIRef.current && snapshot) {
+            univerAPIRef.current.getActiveWorkbook()?.updateWorkbookFromJSON(snapshot);
+            console.log(`[FullSpreadsheet] Data updated from embedded (${type})`);
+          }
         }
-      });
-
-      // Cleanup
-      return () => {
-        bc.close();
       };
     } catch (err) {
       console.error("FULL → failed to initialize Univer:", err);
@@ -177,12 +171,12 @@ useEffect(() => {
       saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
       console.log(`[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
     }
-
     univerAPIRef.current?.dispose();
     univerInstanceRef.current?.dispose();
     isInitializedRef.current = false;
   };
 }, [lessonSlug, lessonMeta, workbookData]);
+
 
 
 
