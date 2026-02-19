@@ -163,7 +163,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 useEffect(() => {
   if (!containerRef.current) return;
 
-  // Dispose old instance if exists
+  // Dispose old instance
   if (univerAPIRef.current) {
     univerAPIRef.current.dispose();
     univerAPIRef.current = null;
@@ -176,6 +176,7 @@ useEffect(() => {
   isInitializedRef.current = true;
 
   const mergedLocales = mergeLocales(UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS);
+
   const { univerAPI, univer } = createUniver({
     locale: LocaleType.EN_US,
     locales: { [LocaleType.EN_US]: mergedLocales },
@@ -188,7 +189,32 @@ useEffect(() => {
   univerAPIRef.current = univerAPI;
   univerInstanceRef.current = univer;
 
-  // --- Load persisted snapshot first ---
+  // --- BroadcastChannel for sync ---
+  const bc = new BroadcastChannel("univer-sync");
+
+  // Respond to snapshot requests from full spreadsheet
+  bc.onmessage = (ev) => {
+    const { type, lessonSlug: msgSlug } = ev.data;
+    if (type === "REQUEST_SNAPSHOT" && msgSlug === lessonSlug && univerAPIRef.current) {
+      const snapshot = univerAPIRef.current.getActiveWorkbook()?.getWorkbookJSON();
+      bc.postMessage({ type: "RESPONSE_SNAPSHOT", lessonSlug, snapshot });
+    }
+  };
+
+  // Auto-save and broadcast on snapshot changes
+  const workbook = univerAPI.getActiveWorkbook();
+  if (workbook && lessonSlug) {
+    workbook.onSnapshotChanged?.(() => {
+      if (!skipSaveRef.current) {
+        saveWorkbookSnapshot(lessonSlug, univerAPI);
+        const snapshot = univerAPI.getActiveWorkbook()?.getWorkbookJSON();
+        bc.postMessage({ type: "UPDATE", lessonSlug, snapshot });
+        console.log(`[UniverSpreadsheet] Auto-saved and broadcast update for "${lessonSlug}".`);
+      }
+    });
+  }
+
+  // Load persisted snapshot or initialData
   const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
   if (savedSnapshot) {
     univerAPI.createWorkbook(savedSnapshot);
@@ -211,38 +237,18 @@ useEffect(() => {
     univerAPI.createWorkbook(workbookData);
   }
 
-  // --- BroadcastChannel for same-tab + cross-tab syncing ---
-  const bc = new BroadcastChannel("univer-sync");
-
-  // Listen to updates from FullSpreadsheet or other embedded sheets
-  bc.onmessage = (ev) => {
-    if (ev.data.lessonSlug === lessonSlug && univerAPIRef.current) {
-      univerAPIRef.current.createWorkbook(ev.data.snapshot);
-      console.log(`[UniverSpreadsheet] Received broadcast snapshot for "${lessonSlug}"`);
-    }
-  };
-
-  // Auto-save and broadcast when workbook changes
-  const workbook = univerAPI.getActiveWorkbook();
-  workbook.onSnapshotChanged?.(() => {
-    if (!skipSaveRef.current) {
-      const snapshot = univerAPIRef.current?.getWorkbookJSON();
-      if (snapshot) {
-        saveWorkbookSnapshot(lessonSlug!, univerAPIRef.current!);
-        bc.postMessage({ lessonSlug, snapshot });
-        console.log(`[UniverSpreadsheet] Broadcast snapshot for "${lessonSlug}"`);
-      }
-    }
-  });
-
   return () => {
-    bc.close();
+    if (lessonSlug && univerAPIRef.current && !skipSaveRef.current) {
+      saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
+    }
     univerAPIRef.current?.dispose();
     univerInstanceRef.current?.dispose();
     isInitializedRef.current = false;
     skipSaveRef.current = false;
+    bc.close();
   };
-}, [lessonSlug]);
+}, [lessonSlug, initialData]);
+
 
 
     const containerHeight = typeof height === "number" ? `${height}px` : height;
