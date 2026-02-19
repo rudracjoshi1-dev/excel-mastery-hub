@@ -76,10 +76,10 @@ export default function FullSpreadsheet() {
     };
   }, [lessonData]);
 
- useEffect(() => {
+useEffect(() => {
   if (!containerRef.current) return;
 
-  // Dispose any existing instance first (prevents mirroring / duplicate data)
+  // Dispose any existing instance first
   if (univerAPIRef.current) {
     univerAPIRef.current.dispose();
     univerAPIRef.current = null;
@@ -92,15 +92,32 @@ export default function FullSpreadsheet() {
   const phase = lessonMeta?.phase ?? 0;
 
   async function init() {
-    // Build presets array — filter preset conditionally added for Phase 6+
-    const presets: any[] = [UniverSheetsCorePreset({ container })];
+    // Load snapshot BEFORE creating Univer
+    const savedSnapshot = lessonSlug
+      ? loadWorkbookSnapshot(lessonSlug)
+      : null;
+
+    const initialWorkbook = savedSnapshot ?? workbookData;
+
+    if (savedSnapshot) {
+      console.log(`[FullSpreadsheet] Using saved snapshot for "${lessonSlug}".`);
+    } else {
+      console.log(`[FullSpreadsheet] Using default workbook data for "${lessonSlug}".`);
+    }
+
+    // Build presets
+    const presets: any[] = [
+      UniverSheetsCorePreset({
+        container,
+        workbook: initialWorkbook, // ✅ THIS is the fix
+      }),
+    ];
 
     const localesToMerge: Record<string, any>[] = [
       UniverPresetSheetsCoreEnUS,
       SheetsSortUIEnUS,
     ];
 
-    // === Phase-based: load filter preset dynamically for Phase 6–7 ===
     if (shouldLoadHeavyPlugins(phase)) {
       try {
         const [filterPresetMod, filterLocaleMod] = await Promise.all([
@@ -114,10 +131,8 @@ export default function FullSpreadsheet() {
 
         console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
       } catch (e) {
-        console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter preset:`, e);
+        console.error(`[FullSpreadsheet] Failed to load filter preset:`, e);
       }
-    } else {
-      console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
     }
 
     const finalLocales = mergeLocales(...localesToMerge);
@@ -134,32 +149,18 @@ export default function FullSpreadsheet() {
 
     univerAPIRef.current = univerAPI;
     univerInstanceRef.current = univer;
-
-    // Load per-lesson snapshot
-    const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
-
-    if (savedSnapshot) {
-      univerAPI.createWorkbook(savedSnapshot);
-      console.log(`[FullSpreadsheet] Loaded snapshot from localStorage for "${lessonSlug}".`);
-    } else {
-      univerAPI.createWorkbook(workbookData);
-      console.log(`[FullSpreadsheet] Loaded default data (no snapshot) for "${lessonSlug}".`);
-    }
   }
 
   init();
 
   return () => {
-    // Save snapshot before disposing
     if (lessonSlug && univerAPIRef.current) {
       saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
       console.log(`[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
     }
 
-    // Dispose both Univer API and instance to fully clean up
     univerAPIRef.current?.dispose();
     univerInstanceRef.current?.dispose();
-
     isInitializedRef.current = false;
   };
 }, [lessonSlug, lessonMeta, workbookData]);
