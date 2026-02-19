@@ -113,8 +113,6 @@ useEffect(() => {
         presets.push(filterPresetMod.UniverSheetsFilterPreset());
         localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
         console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
-      } else {
-        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode`);
       }
 
       const finalLocales = mergeLocales(...localesToMerge);
@@ -135,9 +133,6 @@ useEffect(() => {
       // --- Load snapshot or default workbook ---
       const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
 
-      console.log("FULL lessonSlug:", lessonSlug);
-      console.log("FULL snapshot exists:", !!savedSnapshot);
-
       if (savedSnapshot) {
         univerAPI.createWorkbook(savedSnapshot);
         console.log("FULL → snapshot loaded");
@@ -145,6 +140,31 @@ useEffect(() => {
         univerAPI.createWorkbook(workbookData);
         console.log("FULL → default workbook loaded");
       }
+
+      // --- BroadcastChannel for real-time syncing ---
+      const bc = new BroadcastChannel("univer-sync");
+      bc.onmessage = (ev) => {
+        if (ev.data.lessonSlug === lessonSlug && univerAPIRef.current) {
+          univerAPIRef.current.createWorkbook(ev.data.snapshot);
+          console.log(`[FullSpreadsheet] Received broadcast snapshot for "${lessonSlug}"`);
+        }
+      };
+
+      // Listen for workbook changes to broadcast to embedded sheets
+      const workbook = univerAPI.getActiveWorkbook();
+      workbook.onSnapshotChanged?.(() => {
+        const snapshot = univerAPIRef.current?.getWorkbookJSON();
+        if (snapshot) {
+          saveWorkbookSnapshot(lessonSlug!, univerAPIRef.current!);
+          bc.postMessage({ lessonSlug, snapshot });
+          console.log(`[FullSpreadsheet] Broadcast snapshot for "${lessonSlug}"`);
+        }
+      });
+
+      // Cleanup
+      return () => {
+        bc.close();
+      };
     } catch (err) {
       console.error("FULL → failed to initialize Univer:", err);
     }
@@ -153,7 +173,6 @@ useEffect(() => {
   init();
 
   return () => {
-    // Save snapshot before disposing
     if (lessonSlug && univerAPIRef.current) {
       saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
       console.log(`[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
