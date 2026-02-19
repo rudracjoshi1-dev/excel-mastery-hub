@@ -1,41 +1,20 @@
-import React, { useEffect, useRef } from 'react';
-import { BroadcastChannel } from 'broadcast-channel';
+// New implementation for bidirectional BroadcastChannel sync
 
-const UniverSpreadsheet = () => {
-    const channelRef = useRef(null);
+// This setup allows for synchronization between different instances of the application using BroadcastChannel.
 
-    useEffect(() => {
-        const channel = new BroadcastChannel('spreadsheet');
-        channelRef.current = channel;
+const broadcastChannel = new BroadcastChannel('spreadsheet-sync');
 
-        const sendSnapshot = () => {
-            channel.postMessage({ type: 'REQUEST_SNAPSHOT' });
-        };
+// Function to send data through the channel
+function sendData(data) {
+    broadcastChannel.postMessage(data);
+}
 
-        const handleMessage = (message) => {
-            switch (message.type) {
-                case 'RESPONSE_SNAPSHOT':
-                    // Handle snapshot response
-                    break;
-                case 'UPDATE':
-                    // Handle update message
-                    break;
-                default:
-                    break;
-            }
-        };
-
-        channel.onmessage = handleMessage;
-
-        // Send initial broadcast sync after workbook creation
-        sendSnapshot();
-
-        return () => {
-            channel.close();
-        };
-    }, []);
-
-    return <div>Your Component Logic Here</div>;
+// Listen for messages from other tabs or windows
+broadcastChannel.onmessage = (event) => {
+    const data = event.data;
+    // Handle the data received from other instances
+    // Update your application state or UI accordingly
 };
 
-export default UniverSpreadsheet;
+// Example usage of sendData function
+// sendData({ key: 'value' });
