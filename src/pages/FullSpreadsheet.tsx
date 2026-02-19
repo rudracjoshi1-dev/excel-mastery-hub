@@ -83,6 +83,8 @@ useEffect(() => {
   if (univerAPIRef.current) {
     univerAPIRef.current.dispose();
     univerAPIRef.current = null;
+    univerInstanceRef.current?.dispose();
+    univerInstanceRef.current = null;
     isInitializedRef.current = false;
   }
 
@@ -92,34 +94,16 @@ useEffect(() => {
   const phase = lessonMeta?.phase ?? 0;
 
   async function init() {
-    // Load snapshot BEFORE creating Univer
-    const savedSnapshot = lessonSlug
-      ? loadWorkbookSnapshot(lessonSlug)
-      : null;
+    try {
+      // --- Build presets ---
+      const presets: any[] = [UniverSheetsCorePreset({ container })];
+      const localesToMerge: Record<string, any>[] = [
+        UniverPresetSheetsCoreEnUS,
+        SheetsSortUIEnUS,
+      ];
 
-    const initialWorkbook = savedSnapshot ?? workbookData;
-
-    if (savedSnapshot) {
-      console.log(`[FullSpreadsheet] Using saved snapshot for "${lessonSlug}".`);
-    } else {
-      console.log(`[FullSpreadsheet] Using default workbook data for "${lessonSlug}".`);
-    }
-
-    // Build presets
-    const presets: any[] = [
-      UniverSheetsCorePreset({
-        container,
-        workbook: initialWorkbook, // ✅ THIS is the fix
-      }),
-    ];
-
-    const localesToMerge: Record<string, any>[] = [
-      UniverPresetSheetsCoreEnUS,
-      SheetsSortUIEnUS,
-    ];
-
-    if (shouldLoadHeavyPlugins(phase)) {
-      try {
+      // Phase-based heavy plugins
+      if (shouldLoadHeavyPlugins(phase)) {
         const [filterPresetMod, filterLocaleMod] = await Promise.all([
           import("@univerjs/preset-sheets-filter"),
           import("@univerjs/preset-sheets-filter/locales/en-US"),
@@ -128,32 +112,48 @@ useEffect(() => {
 
         presets.push(filterPresetMod.UniverSheetsFilterPreset());
         localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
-
         console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
-      } catch (e) {
-        console.error(`[FullSpreadsheet] Failed to load filter preset:`, e);
+      } else {
+        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode`);
       }
+
+      const finalLocales = mergeLocales(...localesToMerge);
+
+      // --- Create Univer ---
+      const { univerAPI, univer } = createUniver({
+        locale: LocaleType.EN_US,
+        locales: { [LocaleType.EN_US]: finalLocales },
+        presets,
+      });
+
+      univer.registerPlugin(UniverSheetsSortPlugin);
+      univer.registerPlugin(UniverSheetsSortUIPlugin);
+
+      univerAPIRef.current = univerAPI;
+      univerInstanceRef.current = univer;
+
+      // --- Load snapshot or default workbook ---
+      const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
+
+      console.log("FULL lessonSlug:", lessonSlug);
+      console.log("FULL snapshot exists:", !!savedSnapshot);
+
+      if (savedSnapshot) {
+        univerAPI.createWorkbook(savedSnapshot);
+        console.log("FULL → snapshot loaded");
+      } else {
+        univerAPI.createWorkbook(workbookData);
+        console.log("FULL → default workbook loaded");
+      }
+    } catch (err) {
+      console.error("FULL → failed to initialize Univer:", err);
     }
-
-    const finalLocales = mergeLocales(...localesToMerge);
-
-    const { univerAPI, univer } = createUniver({
-      locale: LocaleType.EN_US,
-      locales: { [LocaleType.EN_US]: finalLocales },
-      presets,
-    });
-
-    // Register stable sorting plugins
-    univer.registerPlugin(UniverSheetsSortPlugin);
-    univer.registerPlugin(UniverSheetsSortUIPlugin);
-
-    univerAPIRef.current = univerAPI;
-    univerInstanceRef.current = univer;
   }
 
   init();
 
   return () => {
+    // Save snapshot before disposing
     if (lessonSlug && univerAPIRef.current) {
       saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
       console.log(`[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`);
@@ -164,6 +164,7 @@ useEffect(() => {
     isInitializedRef.current = false;
   };
 }, [lessonSlug, lessonMeta, workbookData]);
+
 
 
   return (
