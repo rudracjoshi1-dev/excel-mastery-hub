@@ -190,6 +190,18 @@ useEffect(() => {
 
   univerAPIRef.current = univerAPI;
   univerInstanceRef.current = univer;
+  // Auto-save whenever workbook changes
+const workbook = univerAPI.getActiveWorkbook();
+
+if (workbook && lessonSlug) {
+  workbook.onSnapshotChanged?.(() => {
+    if (!skipSaveRef.current) {
+      saveWorkbookSnapshot(lessonSlug, univerAPI);
+      console.log(`[UniverSpreadsheet] Auto-saved snapshot for "${lessonSlug}".`);
+    }
+  });
+}
+
 
   // Load persisted snapshot
   const savedSnapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
