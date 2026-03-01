@@ -1,5 +1,3 @@
-import type { FUniver } from "@univerjs/presets";
-
 const STORAGE_PREFIX = "univer-workbook-";
 
 /**
@@ -33,23 +31,23 @@ export function loadWorkbookSnapshot(lessonId: string): Record<string, any> | nu
 
 /**
  * Save the current workbook snapshot to localStorage.
- * Call this on unmount / before navigation.
+ * Uses univerAPI (any-typed since FUniver types are incomplete).
  */
-export function saveWorkbookSnapshot(lessonId: string, univerAPI: FUniver): boolean {
+export function saveWorkbookSnapshot(lessonId: string, univerAPI: any): boolean {
   try {
-    const workbook = univerAPI.getActiveWorkbook();
+    const workbook = univerAPI.getActiveWorkbook?.();
     if (!workbook) {
       console.warn(`[workbookPersistence] No active workbook to save for "${lessonId}".`);
       return false;
     }
-    const snapshot = (workbook as any).save?.() ?? (workbook as any).getSnapshot();
+    const snapshot = workbook.save?.() ?? workbook.getSnapshot?.();
     if (!snapshot) {
       console.warn(`[workbookPersistence] getSnapshot() returned null for "${lessonId}".`);
       return false;
     }
     const key = getWorkbookStorageKey(lessonId);
     localStorage.setItem(key, JSON.stringify(snapshot));
-    console.log(`[workbookPersistence] Saved snapshot for "${lessonId}".`);
+    console.log(`[workbookPersistence] Saved snapshot for "${lessonId}" → key="${key}".`);
     return true;
   } catch (e) {
     console.error(`[workbookPersistence] Failed to save snapshot for "${lessonId}":`, e);

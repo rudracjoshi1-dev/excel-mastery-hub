@@ -8,12 +8,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { 
-  UniverSpreadsheet, 
-  UniverSpreadsheetRef, 
-  SheetData, 
-  arrayToCellData 
+import {
+  UniverSpreadsheet,
+  arrayToCellData,
 } from "./UniverSpreadsheet";
+import type { UniverSpreadsheetRef, SheetData } from "./UniverSpreadsheet";
 import { clearWorkbookSnapshot } from "@/lib/workbookPersistence";
 
 interface ValidationResult {
