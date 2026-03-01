@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useMemo } from "react";
-import { Check, Eye, RotateCcw, Lightbulb, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Check, Eye, RotateCcw, Lightbulb, CheckCircle, XCircle, AlertCircle, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -216,6 +216,30 @@ export function UniverInteractiveLesson({
             This shows the correct solution. Study the structure and data organization.
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* Full Spreadsheet Mode Button */}
+      {lessonSlug && !showModelAnswer && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              // Save current state before opening full mode
+              if (spreadsheetRef.current && lessonSlug) {
+                spreadsheetRef.current.endEditing().then(() => {
+                  window.open(`/sheet?lesson=${lessonSlug}`, '_blank');
+                });
+              } else {
+                window.open(`/sheet?lesson=${lessonSlug}`, '_blank');
+              }
+            }}
+          >
+            <Maximize2 className="h-4 w-4" />
+            Open Full Spreadsheet
+          </Button>
+        </div>
       )}
 
       {/* Spreadsheet - User's workspace OR Model Answer */}
