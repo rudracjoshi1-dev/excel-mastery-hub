@@ -1,165 +1,167 @@
 import { useEffect, useRef, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
+import { useSearchParams, Link } from "react-router-dom";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
+import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
+import type { FUniver } from "@univerjs/presets";
 import "@univerjs/preset-sheets-core/lib/index.css";
-import {
-  loadWorkbookSnapshot,
-  saveWorkbookSnapshot,
-} from "@/lib/workbookPersistence";
-import { getLessonBySlug } from "@/data/lessons";
+
+// Sorting plugins (stable — registered manually, no preset available)
+import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
+import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
+import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
+import "@univerjs/sheets-sort-ui/lib/index.css";
+// Filter plugins are dynamically imported for Phase 6+ lessons only
+
+import { lessons } from "@/data/lessons";
 import { arrayToCellData } from "@/components/lessons/UniverSpreadsheet";
+import { getLessonByPath, shouldLoadHeavyPlugins } from "@/data/allLessons";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
- * Full-tab spreadsheet at /sheet?lesson=<slug>
- * Shares persistence with the embedded UniverSpreadsheet via localStorage.
+ * Full Spreadsheet page — opens in a new browser tab via /sheet?lesson=<slug>
+ * 
+ * Architecture notes:
+ * - This page has its OWN Univer instance, completely isolated from embedded spreadsheets
+ * - Heavy plugins (filter, conditional formatting) will be registered HERE only
+ * - Dynamic imports for heavy plugins will be added in future iterations
+ * - The embedded UniverSpreadsheet component remains lightweight
  */
 export default function FullSpreadsheet() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const lessonSlug = searchParams.get("lesson") ?? undefined;
+  const lessonSlug = searchParams.get("lesson");
   const containerRef = useRef<HTMLDivElement>(null);
-  const univerAPIRef = useRef<any>(null);
+  const univerAPIRef = useRef<FUniver | null>(null);
+  const isInitializedRef = useRef(false);
 
-  // Get default data from lesson if available
-  const defaultWorkbookData = useMemo(() => {
+  // Find lesson metadata for plugin gating
+  const lessonMeta = useMemo(() => {
     if (!lessonSlug) return null;
-    const lesson = getLessonBySlug(lessonSlug);
-    if (!lesson) {
-      // Return a blank workbook
-      return {
-        id: "full-sheet",
-        name: "Spreadsheet",
-        appVersion: "",
-        sheets: {
-          "full-sheet": {
-            id: "full-sheet",
-            name: "Sheet1",
-            cellData: {},
-            rowCount: 30,
-            columnCount: 15,
-          },
-        },
-        sheetOrder: ["full-sheet"],
-      };
-    }
-    const cellData = arrayToCellData(lesson.interactiveTask.initialData);
-    return {
-      id: "lesson-sheet",
-      name: lesson.title,
-      appVersion: "",
-      sheets: {
-        "lesson-sheet": {
-          id: "lesson-sheet",
-          name: "Practice",
-          cellData,
-          rowCount: Math.max(30, lesson.interactiveTask.initialData.length + 10),
-          columnCount: Math.max(
-            15,
-            (lesson.interactiveTask.initialData[0]?.length ?? 4) + 5
-          ),
-        },
-      },
-      sheetOrder: ["lesson-sheet"],
-    };
+    return getLessonByPath(lessonSlug) ?? null;
   }, [lessonSlug]);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
+  // Find lesson data if a lesson slug is provided (legacy lookup)
+  const lessonData = useMemo(() => {
+    if (!lessonSlug) return null;
+    // Try the slug directly (top-level lesson)
+    return lessons.find((l) => l.slug === lessonSlug) ?? null;
+  }, [lessonSlug]);
 
-    if (!lessonSlug) {
-      console.warn("[FullSpreadsheet] No lesson slug in URL. Persistence disabled.");
-    }
+  // Build workbook data from lesson or start blank
+  const workbookData = useMemo(() => {
+    const initialData = lessonData?.interactiveTask?.initialData;
+    const cellData = initialData ? arrayToCellData(initialData) : {};
+    const rowCount = initialData ? Math.max(50, initialData.length + 10) : 50;
+    const columnCount = initialData
+      ? Math.max(26, (initialData[0]?.length ?? 0) + 5)
+      : 26;
 
-    const storageKey = lessonSlug
-      ? `univer-workbook-${lessonSlug}`
-      : undefined;
-
-    console.log(`[FullSpreadsheet] lessonSlug="${lessonSlug}"`);
-    console.log(`[FullSpreadsheet] storageKey="${storageKey}"`);
-
-    // Try loading persisted data
-    let workbookData: any = null;
-    if (lessonSlug) {
-      const saved = loadWorkbookSnapshot(lessonSlug);
-      if (saved) {
-        console.log(
-          `[FullSpreadsheet] Loaded saved snapshot for "${lessonSlug}".`
-        );
-        workbookData = saved;
-      }
-    }
-
-    // Fall back to lesson defaults
-    if (!workbookData) {
-      console.log(
-        `[FullSpreadsheet] Using default data for "${lessonSlug ?? "no-slug"}".`
-      );
-      workbookData = defaultWorkbookData ?? {
-        id: "blank",
-        name: "Spreadsheet",
-        sheets: {
-          blank: {
-            id: "blank",
-            name: "Sheet1",
-            cellData: {},
-            rowCount: 30,
-            columnCount: 15,
-          },
+    return {
+      id: "full-workbook",
+      sheetOrder: ["sheet-1"],
+      name: lessonData?.title ?? "Spreadsheet",
+      appVersion: "1.0.0",
+      sheets: {
+        "sheet-1": {
+          id: "sheet-1",
+          name: lessonData?.title ?? "Sheet1",
+          rowCount,
+          columnCount,
+          cellData,
         },
-        sheetOrder: ["blank"],
-      };
+      },
+    };
+  }, [lessonData]);
+
+  useEffect(() => {
+    if (!containerRef.current || isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
+    const container = containerRef.current;
+    const phase = lessonMeta?.phase ?? 0;
+
+    async function init() {
+      // Build presets array — filter preset conditionally added for Phase 6+
+      const presets: any[] = [
+        UniverSheetsCorePreset({ container }),
+      ];
+
+      const localesToMerge: Record<string, any>[] = [
+        UniverPresetSheetsCoreEnUS,
+        SheetsSortUIEnUS,
+      ];
+
+      // === Phase-based: load filter preset dynamically for Phase 6–7 ===
+      if (shouldLoadHeavyPlugins(phase)) {
+        try {
+          const [filterPresetMod, filterLocaleMod] = await Promise.all([
+            import("@univerjs/preset-sheets-filter"),
+            import("@univerjs/preset-sheets-filter/locales/en-US"),
+          ]);
+          await import("@univerjs/preset-sheets-filter/lib/index.css");
+
+          presets.push(filterPresetMod.UniverSheetsFilterPreset());
+          localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
+
+          console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
+        } catch (e) {
+          console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter preset:`, e);
+        }
+      } else {
+        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
+      }
+
+      const finalLocales = mergeLocales(...localesToMerge);
+
+      const { univerAPI, univer } = createUniver({
+        locale: LocaleType.EN_US,
+        locales: { [LocaleType.EN_US]: finalLocales },
+        presets,
+      });
+
+      // Register sorting plugins (stable, always available)
+      univer.registerPlugin(UniverSheetsSortPlugin);
+      univer.registerPlugin(UniverSheetsSortUIPlugin);
+
+      univerAPIRef.current = univerAPI;
+      univerAPI.createWorkbook(workbookData);
     }
 
-    // Create Univer
-    const { univerAPI } = createUniver({
-      locale: LocaleType.EN_US,
-      locales: {
-        [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS),
-      },
-      presets: [
-        UniverSheetsCorePreset({
-          container: containerRef.current,
-        }),
-      ],
-    });
-
-    univerAPIRef.current = univerAPI;
-    univerAPI.createWorkbook(workbookData);
+    init();
 
     return () => {
-      // Save on unmount
-      if (lessonSlug && univerAPIRef.current) {
-        saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
-        console.log(
-          `[FullSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`
-        );
-      }
-      try {
-        univerAPI.dispose();
-      } catch {
-        // ignore
-      }
-      univerAPIRef.current = null;
+      univerAPIRef.current?.dispose();
+      isInitializedRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Mount once
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <header className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/50">
-        <h1 className="text-sm font-medium text-foreground">
-          Full Spreadsheet{lessonSlug ? ` — ${lessonSlug}` : ""}
-        </h1>
-        <button
-          onClick={() => navigate(-1)}
-          className="text-xs text-muted-foreground hover:text-foreground underline"
-        >
-          ← Back to lesson
-        </button>
-      </header>
-      <div ref={containerRef} className="flex-1" />
+      {/* Compact header bar */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-muted/30 shrink-0">
+        {lessonSlug && (
+          <Link to={`/learn/${lessonSlug}`} target="_self">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-xs">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Lesson
+            </Button>
+          </Link>
+        )}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-semibold text-sm truncate">
+            {lessonMeta?.title ?? lessonData?.title ?? "Full Spreadsheet"}
+          </span>
+          {lessonMeta && (
+            <span className="text-xs text-muted-foreground shrink-0">
+              — Phase {lessonMeta.phase} · {shouldLoadHeavyPlugins(lessonMeta.phase) ? "Advanced Mode" : "Standard Mode"}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Spreadsheet fills remaining space */}
+      <div ref={containerRef} className="flex-1 min-h-0" />
     </div>
   );
 }
