@@ -90,7 +90,7 @@ export function Header() {
         {/* CTA Button */}
         <div className="hidden lg:block">
           <Button asChild className="bg-primary hover:bg-primary/90">
-            <Link to="/learn/lesson-1">Start Learning</Link>
+            <Link to="/learn/what-is-excel">Start Learning</Link>
           </Button>
         </div>
 
@@ -148,7 +148,7 @@ export function Header() {
 
             <div className="pt-4">
               <Button asChild className="w-full bg-primary hover:bg-primary/90">
-                <Link to="/learn/lesson-1" onClick={() => setMobileMenuOpen(false)}>
+                <Link to="/learn/what-is-excel" onClick={() => setMobileMenuOpen(false)}>
                   Start Learning
                 </Link>
               </Button>

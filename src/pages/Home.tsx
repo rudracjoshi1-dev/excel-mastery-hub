@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, BookOpen, Target, Users, CheckCircle, FileSpreadsheet, BarChart3, Calculator } from "lucide-react";
-import { getAllLessons } from "@/data/lessons";
+import { phases } from "@/data/lessonHierarchy";
+import { allLessons } from "@/data/allLessons";
 
 const features = [
   { icon: BookOpen, title: "75+ Structured Lessons", description: "From complete beginner to confident user" },
@@ -13,8 +14,10 @@ const features = [
   { icon: CheckCircle, title: "Real-World Examples", description: "Learn skills you'll actually use" },
 ];
 
+// Get first 4 top-level lessons from the hierarchy
+const previewLessons = allLessons.filter(l => l.parentSlug === null).slice(0, 4);
+
 export default function Home() {
-  const lessons = getAllLessons().slice(0, 4);
 
   return (
     <Layout>
@@ -32,7 +35,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg" className="gap-2">
-                <Link to="/learn/lesson-1">
+                <Link to="/learn/what-is-excel">
                   Start Lesson 1
                   <ArrowRight className="h-5 w-5" />
                 </Link>
@@ -75,19 +78,19 @@ export default function Home() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            {lessons.map((lesson) => (
-              <Card key={lesson.id} className="hover:shadow-md transition-shadow">
+            {previewLessons.map((lesson) => (
+              <Card key={lesson.displayId} className="hover:shadow-md transition-shadow">
                 <CardHeader>
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline">Lesson {lesson.id}</Badge>
+                    <Badge variant="outline">Lesson {lesson.displayId}</Badge>
                     <Badge variant="secondary">{lesson.duration}</Badge>
                   </div>
                   <CardTitle className="text-lg">{lesson.title}</CardTitle>
-                  <CardDescription>{lesson.description}</CardDescription>
+                  <CardDescription>{lesson.category}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Button asChild variant="ghost" className="gap-2 p-0 h-auto text-primary">
-                    <Link to={`/learn/${lesson.slug}`}>
+                    <Link to={`/learn/${lesson.fullPath}`}>
                       Start Lesson <ArrowRight className="h-4 w-4" />
                     </Link>
                   </Button>
@@ -144,7 +147,7 @@ export default function Home() {
               Start with Lesson 1 and work through at your own pace. Each lesson takes 10-20 minutes.
             </p>
             <Button asChild size="lg" variant="secondary" className="gap-2">
-              <Link to="/learn/lesson-1">
+              <Link to="/learn/what-is-excel">
                 Begin Your Journey
                 <ArrowRight className="h-5 w-5" />
               </Link>
