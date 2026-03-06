@@ -1,244 +1,258 @@
-import {
-  useEffect,
-  useRef,
-  useImperativeHandle,
-  forwardRef,
-  memo,
-} from "react";
-import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
+import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
+import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
+import type { FUniver } from "@univerjs/presets";
 import "@univerjs/preset-sheets-core/lib/index.css";
-import {
-  loadWorkbookSnapshot,
-  saveWorkbookSnapshot,
-} from "@/lib/workbookPersistence";
 
-// ── Types ────────────────────────────────────────────────────────
+// Sorting plugin imports
+import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
+import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
+import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
+import "@univerjs/sheets-sort-ui/lib/index.css";
+
+// Icons for custom toolbar
+import { ArrowUpDown, Info, Maximize2 } from "lucide-react";
 
 export interface SheetData {
-  id: string;
-  name: string;
-  cellData: Record<number, Record<number, { v: string | number }>>;
-  rowCount: number;
-  columnCount: number;
+  id?: string;
+  name?: string;
+  cellData?: Record<number, Record<number, { v?: string | number; f?: string }>>;
+  rowCount?: number;
+  columnCount?: number;
+}
+
+export interface UniverSpreadsheetProps {
+  /** Initial data to populate the spreadsheet */
+  initialData?: SheetData;
+  /** Height of the spreadsheet container */
+  height?: string | number;
+  /** Whether the spreadsheet is read-only */
+  readOnly?: boolean;
+  /** Lesson slug for "Open in Full Mode" link */
+  lessonSlug?: string;
+  /** Callback when data changes */
+  onChange?: (data: SheetData) => void;
 }
 
 export interface UniverSpreadsheetRef {
-  /** Read current sheet data as a 2D string array */
+  /** Get current spreadsheet data as 2D array */
   getDataArray: () => string[][] | null;
-  /** End any active cell editing so values are committed */
+  /** Get the Univer API instance */
+  getAPI: () => FUniver | null;
+  /** End editing to commit current cell value */
   endEditing: () => Promise<void>;
-  /** Flag to skip saving on the next unmount (used during reset) */
-  skipNextSave: () => void;
+  /** Reset the spreadsheet to initial data */
+  reset: () => void;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────
-
-/** Convert a 2D string array into UniverJS cellData format */
-export function arrayToCellData(
-  data: string[][]
-): Record<number, Record<number, { v: string | number }>> {
-  const cellData: Record<number, Record<number, { v: string | number }>> = {};
-  for (let r = 0; r < data.length; r++) {
-    cellData[r] = {};
-    for (let c = 0; c < data[r].length; c++) {
-      if (data[r][c] !== "") {
-        cellData[r][c] = { v: data[r][c] };
-      }
-    }
-  }
+/**
+ * Convert a 2D string array to Univer cellData format
+ */
+export function arrayToCellData(data: string[][]): Record<number, Record<number, { v: string }>> {
+  const cellData: Record<number, Record<number, { v: string }>> = {};
+  
+  data.forEach((row, rowIndex) => {
+    cellData[rowIndex] = {};
+    row.forEach((cell, colIndex) => {
+      cellData[rowIndex][colIndex] = { v: cell };
+    });
+  });
+  
   return cellData;
 }
 
-/** Convert UniverJS cellData back to a 2D string array */
-function cellDataToArray(
-  cellData: Record<string, Record<string, { v?: string | number }>> | undefined,
-  rowCount: number,
-  colCount: number
-): string[][] {
-  const result: string[][] = [];
-  for (let r = 0; r < rowCount; r++) {
-    const row: string[] = [];
-    for (let c = 0; c < colCount; c++) {
-      const cell = cellData?.[r]?.[c];
-      row.push(cell?.v != null ? String(cell.v) : "");
-    }
-    result.push(row);
-  }
-  return result;
-}
+/**
+ * Reusable Univer Spreadsheet component with Excel-like functionality
+ * Supports keyboard navigation, formulas, copy/paste, drag fill, sorting
+ */
+export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsheetProps>(
+  ({ initialData, height = 400, readOnly = false, lessonSlug, onChange }, ref) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const univerAPIRef = useRef<FUniver | null>(null);
+    const univerInstanceRef = useRef<any>(null);
+    const isInitializedRef = useRef(false);
+    const initialDataRef = useRef(initialData);
 
-// ── Props ────────────────────────────────────────────────────────
+    // Update initial data ref when prop changes
+    initialDataRef.current = initialData;
 
-interface UniverSpreadsheetProps {
-  initialData: SheetData;
-  height?: number;
-  readOnly?: boolean;
-  /** Lesson slug for localStorage persistence key */
-  lessonSlug?: string;
-}
-
-// ── Component ────────────────────────────────────────────────────
-
-export const UniverSpreadsheet = memo(
-  forwardRef<UniverSpreadsheetRef, UniverSpreadsheetProps>(
-    function UniverSpreadsheet(
-      { initialData, height = 450, readOnly = false, lessonSlug },
-      ref
-    ) {
-      const containerRef = useRef<HTMLDivElement>(null);
-      const univerAPIRef = useRef<any>(null);
-      const skipSaveRef = useRef(false);
-
-      // Expose imperative methods
-      useImperativeHandle(
-        ref,
-        () => ({
-          getDataArray: () => {
-            try {
-              const api = univerAPIRef.current;
-              if (!api) return null;
-              const wb = api.getActiveWorkbook?.();
-              if (!wb) return null;
-              const sheet = wb.getActiveSheet?.();
-              if (!sheet) return null;
-              const snapshot = wb.getSnapshot?.();
-              if (!snapshot?.sheets) return null;
-              const sheetId = sheet.getSheetId?.();
-              const sheetData = snapshot.sheets[sheetId];
-              if (!sheetData) return null;
-              return cellDataToArray(
-                sheetData.cellData,
-                sheetData.rowCount ?? 20,
-                sheetData.columnCount ?? 10
-              );
-            } catch (e) {
-              console.warn("[UniverSpreadsheet] getDataArray error:", e);
-              return null;
-            }
-          },
-          endEditing: async () => {
-            // No direct "end editing" API; a small delay lets the cell commit
-            await new Promise((r) => setTimeout(r, 100));
-          },
-          skipNextSave: () => {
-            skipSaveRef.current = true;
-            console.log(
-              `[UniverSpreadsheet] skipNextSave flagged for "${lessonSlug}".`
-            );
-          },
-        }),
-        [lessonSlug]
-      );
-
-      useEffect(() => {
-        if (!containerRef.current) return;
-
-        // Determine storage key
-        const storageKey = lessonSlug
-          ? `univer-workbook-${lessonSlug}`
-          : undefined;
-
-        console.log(`[UniverSpreadsheet] lessonSlug="${lessonSlug}"`);
-        console.log(`[UniverSpreadsheet] storageKey="${storageKey}"`);
-
-        // Check for persisted snapshot
-        let workbookData: any = null;
-        if (lessonSlug) {
-          const saved = loadWorkbookSnapshot(lessonSlug);
-          if (saved) {
-            console.log(
-              `[UniverSpreadsheet] Loaded saved snapshot for "${lessonSlug}".`
-            );
-            workbookData = saved;
-          }
-        }
-
-        // Fall back to initial data
-        if (!workbookData) {
-          console.log(
-            `[UniverSpreadsheet] Using default initial data for "${lessonSlug ?? "no-slug"}".`
+    // Expose methods via ref
+    useImperativeHandle(ref, () => ({
+      getDataArray: () => {
+        if (!univerAPIRef.current) return null;
+        const workbook = univerAPIRef.current.getActiveWorkbook();
+        if (!workbook) return null;
+        const sheet = workbook.getActiveSheet();
+        if (!sheet) return null;
+        
+        // Get data using Range API
+        const rowCount = initialDataRef.current?.rowCount || 20;
+        const colCount = initialDataRef.current?.columnCount || 10;
+        const range = sheet.getRange(0, 0, rowCount, colCount);
+        
+        try {
+          const values = range.getValues();
+          // Convert to string[][] ensuring all values are strings
+          return values.map(row => 
+            row.map(cell => (cell === null || cell === undefined) ? "" : String(cell))
           );
-          workbookData = {
-            id: initialData.id,
-            name: initialData.name,
-            appVersion: "",
-            sheets: {
-              [initialData.id]: {
-                id: initialData.id,
-                name: initialData.name,
-                cellData: initialData.cellData,
-                rowCount: initialData.rowCount,
-                columnCount: initialData.columnCount,
-              },
-            },
-            sheetOrder: [initialData.id],
-          };
+        } catch (e) {
+          console.error("Error getting values:", e);
+          return null;
         }
-
-        // Create Univer instance
-        const { univerAPI } = createUniver({
-          locale: LocaleType.EN_US,
-          locales: {
-            [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS),
-          },
-          presets: [
-            UniverSheetsCorePreset({
-              container: containerRef.current,
-            }),
-          ],
-        });
-
-        univerAPIRef.current = univerAPI;
-
-        // Create workbook from data
-        univerAPI.createWorkbook(workbookData);
-
-        // Set read-only if needed
-        if (readOnly) {
-          try {
-            const wb = univerAPI.getActiveWorkbook?.();
-            wb?.setEditable?.(false);
-          } catch {
-            // ignore
-          }
+      },
+      getAPI: () => univerAPIRef.current,
+      endEditing: async () => {
+        if (!univerAPIRef.current) return;
+        const workbook = univerAPIRef.current.getActiveWorkbook();
+        if (workbook && typeof (workbook as any).endEditingAsync === 'function') {
+          await (workbook as any).endEditingAsync(true);
         }
-
-        // Cleanup
-        return () => {
-          // Save before dispose
-          if (lessonSlug && univerAPIRef.current && !skipSaveRef.current) {
-            saveWorkbookSnapshot(lessonSlug, univerAPIRef.current);
-            console.log(
-              `[UniverSpreadsheet] Saved snapshot on unmount for "${lessonSlug}".`
-            );
-          } else if (skipSaveRef.current) {
-            console.log(
-              `[UniverSpreadsheet] Skipped save on unmount (reset flagged) for "${lessonSlug}".`
-            );
+      },
+      reset: () => {
+        if (!univerAPIRef.current || !initialDataRef.current) return;
+        const workbook = univerAPIRef.current.getActiveWorkbook();
+        if (!workbook) return;
+        const sheet = workbook.getActiveSheet();
+        if (!sheet) return;
+        
+        // Clear existing data and restore initial data
+        const rowCount = initialDataRef.current.rowCount || 20;
+        const colCount = initialDataRef.current.columnCount || 10;
+        const range = sheet.getRange(0, 0, rowCount, colCount);
+        
+        try {
+          // Clear all cells first
+          const clearData: (string | null)[][] = Array(rowCount).fill(null).map(() => 
+            Array(colCount).fill(null)
+          );
+          range.setValues(clearData);
+          
+          // Restore initial data
+          if (initialDataRef.current.cellData) {
+            Object.entries(initialDataRef.current.cellData).forEach(([rowStr, rowData]) => {
+              const rowIndex = parseInt(rowStr);
+              Object.entries(rowData as Record<number, { v?: string | number }>).forEach(([colStr, cellData]) => {
+                const colIndex = parseInt(colStr);
+                const cellRange = sheet.getRange(rowIndex, colIndex, 1, 1);
+                if (cellData.v !== undefined) {
+                  cellRange.setValue(cellData.v);
+                }
+              });
+            });
           }
-          skipSaveRef.current = false;
+        } catch (e) {
+          console.error("Error resetting spreadsheet:", e);
+        }
+      },
+    }));
 
-          try {
-            univerAPI.dispose();
-          } catch {
-            // ignore dispose errors
-          }
-          univerAPIRef.current = null;
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, []);
+    useEffect(() => {
+      if (!containerRef.current || isInitializedRef.current) return;
+      
+      isInitializedRef.current = true;
 
-      return (
-        <div
-          ref={containerRef}
-          style={{ height, width: "100%" }}
-          className="border border-border rounded-md overflow-hidden"
-        />
+      // Merge locales for i18n support
+      const mergedLocales = mergeLocales(
+        UniverPresetSheetsCoreEnUS,
+        SheetsSortUIEnUS
       );
-    }
-  )
+
+      // Create Univer instance with sheets preset
+      const { univerAPI, univer } = createUniver({
+        locale: LocaleType.EN_US,
+        locales: {
+          [LocaleType.EN_US]: mergedLocales,
+        },
+        presets: [
+          UniverSheetsCorePreset({
+            container: containerRef.current,
+          }),
+        ],
+      });
+
+      // Register sorting plugins
+      univer.registerPlugin(UniverSheetsSortPlugin);
+      univer.registerPlugin(UniverSheetsSortUIPlugin);
+
+      univerAPIRef.current = univerAPI;
+      univerInstanceRef.current = univer;
+
+      // Create initial workbook with data
+      const workbookData = {
+        id: initialData?.id || "workbook-1",
+        sheetOrder: ["sheet-1"],
+        name: "Workbook",
+        appVersion: "1.0.0",
+        sheets: {
+          "sheet-1": {
+            id: "sheet-1",
+            name: initialData?.name || "Sheet1",
+            rowCount: initialData?.rowCount || 20,
+            columnCount: initialData?.columnCount || 10,
+            cellData: initialData?.cellData || {},
+          },
+        },
+      };
+
+      univerAPI.createWorkbook(workbookData);
+
+      return () => {
+        univerAPI.dispose();
+        isInitializedRef.current = false;
+      };
+    }, []); // Empty deps - only run once on mount
+
+    const containerHeight = typeof height === "number" ? `${height}px` : height;
+    // Subtract toolbar height from container
+    const spreadsheetHeight = typeof height === "number" ? height - 36 : `calc(${height} - 36px)`;
+
+    return (
+      <div className="univer-spreadsheet-wrapper rounded-lg overflow-hidden border border-border">
+        {/* Tips Toolbar */}
+        <div className="flex items-center gap-3 px-3 py-2 bg-muted/50 border-b border-border">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 text-primary" />
+            <span className="font-medium">Tips:</span>
+          </div>
+          
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <ArrowUpDown className="h-3 w-3" />
+            <span>Right-click any cell → <strong>Sort A-Z</strong> or <strong>Sort Z-A</strong></span>
+          </div>
+          
+          <div className="h-3 w-px bg-border" />
+          
+          <span className="text-xs text-muted-foreground">
+            Use formulas like <code className="bg-muted px-1 rounded">=SUM(A1:A5)</code>
+          </span>
+          
+          {lessonSlug && (
+            <>
+              <div className="h-3 w-px bg-border" />
+              <a
+                href={`/sheet?lesson=${lessonSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors font-medium ml-auto"
+              >
+                <Maximize2 className="h-3 w-3" />
+                <span>Open Full Mode</span>
+              </a>
+            </>
+          )}
+        </div>
+        
+        {/* Spreadsheet Container */}
+        <div 
+          ref={containerRef} 
+          className="univer-spreadsheet-container"
+          style={{ height: spreadsheetHeight, width: "100%" }}
+        />
+      </div>
+    );
+  }
 );
 
-export default UniverSpreadsheet;
+UniverSpreadsheet.displayName = "UniverSpreadsheet";

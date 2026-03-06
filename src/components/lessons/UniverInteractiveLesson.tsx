@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useMemo } from "react";
-import { Check, Eye, RotateCcw, Lightbulb, CheckCircle, XCircle, AlertCircle, Maximize2 } from "lucide-react";
+import { Check, Eye, RotateCcw, Lightbulb, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -8,12 +8,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  UniverSpreadsheet,
-  arrayToCellData,
+import { 
+  UniverSpreadsheet, 
+  UniverSpreadsheetRef, 
+  SheetData, 
+  arrayToCellData 
 } from "./UniverSpreadsheet";
-import type { UniverSpreadsheetRef, SheetData } from "./UniverSpreadsheet";
-import { clearWorkbookSnapshot } from "@/lib/workbookPersistence";
 
 interface ValidationResult {
   status: "correct" | "partial" | "incorrect";
@@ -179,17 +179,10 @@ export function UniverInteractiveLesson({
   }, [expectedResult, validationRules]);
 
   const handleReset = useCallback(() => {
-    // Tell the current spreadsheet to skip saving on unmount
-    spreadsheetRef.current?.skipNextSave();
-    // Clear the persisted snapshot so the fresh mount loads defaults
-    if (lessonSlug) {
-      clearWorkbookSnapshot(lessonSlug);
-      console.log(`[UniverInteractiveLesson] Cleared snapshot for "${lessonSlug}" before reset.`);
-    }
     setShowModelAnswer(false);
     setValidationResult(null);
     setKey(prev => prev + 1); // Force re-mount of spreadsheet
-  }, [lessonSlug]);
+  }, []);
 
   const handleRevealAnswer = useCallback(() => {
     setShowModelAnswer(true);
@@ -216,30 +209,6 @@ export function UniverInteractiveLesson({
             This shows the correct solution. Study the structure and data organization.
           </AlertDescription>
         </Alert>
-      )}
-
-      {/* Full Spreadsheet Mode Button */}
-      {lessonSlug && !showModelAnswer && (
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              // Save current state before opening full mode
-              if (spreadsheetRef.current && lessonSlug) {
-                spreadsheetRef.current.endEditing().then(() => {
-                  window.open(`/sheet?lesson=${lessonSlug}`, '_blank');
-                });
-              } else {
-                window.open(`/sheet?lesson=${lessonSlug}`, '_blank');
-              }
-            }}
-          >
-            <Maximize2 className="h-4 w-4" />
-            Open Full Spreadsheet
-          </Button>
-        </div>
       )}
 
       {/* Spreadsheet - User's workspace OR Model Answer */}
