@@ -4,9 +4,9 @@ import { Grid3X3, Mail, ExternalLink } from "lucide-react";
 const footerLinks = {
   learn: [
     { name: "All Lessons", href: "/learn" },
-    { name: "Lesson 1: What is Excel", href: "/learn/lesson-1" },
-    { name: "Lesson 5: Basic Formulas", href: "/learn/lesson-5" },
-    { name: "Lesson 8: Common Functions", href: "/learn/lesson-8" },
+    { name: "What Is Excel", href: "/learn/what-is-excel" },
+    { name: "Entering Data", href: "/learn/entering-data" },
+    { name: "Basic Formatting", href: "/learn/basic-formatting" },
   ],
   categories: [
     { name: "Excel Basics", href: "/categories/excel" },
