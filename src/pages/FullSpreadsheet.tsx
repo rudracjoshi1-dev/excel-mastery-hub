@@ -6,27 +6,22 @@ import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
 import type { FUniver } from "@univerjs/presets";
 import "@univerjs/preset-sheets-core/lib/index.css";
 
-// Sorting plugins (stable — registered manually, no preset available)
+// Sorting plugins
 import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
 import { UniverSheetsSortUIPlugin } from "@univerjs/sheets-sort-ui";
 import SheetsSortUIEnUS from "@univerjs/sheets-sort-ui/locale/en-US";
 import "@univerjs/sheets-sort-ui/lib/index.css";
-// Filter plugins are dynamically imported for Phase 6+ lessons only
 
 import { lessons } from "@/data/lessons";
 import { arrayToCellData } from "@/components/lessons/UniverSpreadsheet";
 import { getLessonByPath, shouldLoadHeavyPlugins } from "@/data/allLessons";
+import { saveWorkbookSnapshot, loadWorkbookSnapshot } from "@/lib/workbookPersistence";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
  * Full Spreadsheet page — opens in a new browser tab via /sheet?lesson=<slug>
- * 
- * Architecture notes:
- * - This page has its OWN Univer instance, completely isolated from embedded spreadsheets
- * - Heavy plugins (filter, conditional formatting) will be registered HERE only
- * - Dynamic imports for heavy plugins will be added in future iterations
- * - The embedded UniverSpreadsheet component remains lightweight
+ * Shares persisted workbook state with the embedded spreadsheet via localStorage.
  */
 export default function FullSpreadsheet() {
   const [searchParams] = useSearchParams();
@@ -34,28 +29,39 @@ export default function FullSpreadsheet() {
   const containerRef = useRef<HTMLDivElement>(null);
   const univerAPIRef = useRef<FUniver | null>(null);
   const isInitializedRef = useRef(false);
+  const dimensionsRef = useRef({ rowCount: 50, columnCount: 26 });
 
-  // Find lesson metadata for plugin gating
   const lessonMeta = useMemo(() => {
     if (!lessonSlug) return null;
     return getLessonByPath(lessonSlug) ?? null;
   }, [lessonSlug]);
 
-  // Find lesson data if a lesson slug is provided (legacy lookup)
   const lessonData = useMemo(() => {
     if (!lessonSlug) return null;
-    // Try the slug directly (top-level lesson)
     return lessons.find((l) => l.slug === lessonSlug) ?? null;
   }, [lessonSlug]);
 
-  // Build workbook data from lesson or start blank
+  // Build workbook data: prefer persisted snapshot, fall back to lesson defaults
   const workbookData = useMemo(() => {
-    const initialData = lessonData?.interactiveTask?.initialData;
-    const cellData = initialData ? arrayToCellData(initialData) : {};
-    const rowCount = initialData ? Math.max(50, initialData.length + 10) : 50;
-    const columnCount = initialData
-      ? Math.max(26, (initialData[0]?.length ?? 0) + 5)
+    const defaultInitialData = lessonData?.interactiveTask?.initialData;
+    let cellData: Record<number, Record<number, { v?: string | number; f?: string }>> =
+      defaultInitialData ? arrayToCellData(defaultInitialData) : {};
+    let rowCount = defaultInitialData ? Math.max(50, defaultInitialData.length + 10) : 50;
+    let columnCount = defaultInitialData
+      ? Math.max(26, (defaultInitialData[0]?.length ?? 0) + 5)
       : 26;
+
+    // Load persisted snapshot if available
+    if (lessonSlug) {
+      const snapshot = loadWorkbookSnapshot(lessonSlug);
+      if (snapshot) {
+        cellData = snapshot.cellData;
+        rowCount = Math.max(rowCount, snapshot.rowCount);
+        columnCount = Math.max(columnCount, snapshot.columnCount);
+      }
+    }
+
+    dimensionsRef.current = { rowCount, columnCount };
 
     return {
       id: "full-workbook",
@@ -72,7 +78,7 @@ export default function FullSpreadsheet() {
         },
       },
     };
-  }, [lessonData]);
+  }, [lessonData, lessonSlug]);
 
   useEffect(() => {
     if (!containerRef.current || isInitializedRef.current) return;
@@ -82,17 +88,9 @@ export default function FullSpreadsheet() {
     const phase = lessonMeta?.phase ?? 0;
 
     async function init() {
-      // Build presets array — filter preset conditionally added for Phase 6+
-      const presets: any[] = [
-        UniverSheetsCorePreset({ container }),
-      ];
+      const presets: any[] = [UniverSheetsCorePreset({ container })];
+      const localesToMerge: Record<string, any>[] = [UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS];
 
-      const localesToMerge: Record<string, any>[] = [
-        UniverPresetSheetsCoreEnUS,
-        SheetsSortUIEnUS,
-      ];
-
-      // === Phase-based: load filter preset dynamically for Phase 6–7 ===
       if (shouldLoadHeavyPlugins(phase)) {
         try {
           const [filterPresetMod, filterLocaleMod] = await Promise.all([
@@ -100,16 +98,11 @@ export default function FullSpreadsheet() {
             import("@univerjs/preset-sheets-filter/locales/en-US"),
           ]);
           await import("@univerjs/preset-sheets-filter/lib/index.css");
-
           presets.push(filterPresetMod.UniverSheetsFilterPreset());
           localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
-
-          console.log(`[FullSpreadsheet] Phase ${phase}: filter preset loaded`);
         } catch (e) {
-          console.error(`[FullSpreadsheet] Phase ${phase}: failed to load filter preset:`, e);
+          console.error("[FullSpreadsheet] failed to load filter preset:", e);
         }
-      } else {
-        console.log(`[FullSpreadsheet] Phase ${phase}: lightweight mode (no heavy plugins)`);
       }
 
       const finalLocales = mergeLocales(...localesToMerge);
@@ -120,7 +113,6 @@ export default function FullSpreadsheet() {
         presets,
       });
 
-      // Register sorting plugins (stable, always available)
       univer.registerPlugin(UniverSheetsSortPlugin);
       univer.registerPlugin(UniverSheetsSortUIPlugin);
 
@@ -130,15 +122,30 @@ export default function FullSpreadsheet() {
 
     init();
 
+    // Save state on unmount (tab close / navigation)
+    const handleBeforeUnload = () => {
+      if (lessonSlug && univerAPIRef.current) {
+        const { rowCount, columnCount } = dimensionsRef.current;
+        const extracted = extractCellDataFromAPI(univerAPIRef.current, rowCount, columnCount);
+        if (extracted) {
+          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount);
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      // Also save on React unmount
+      handleBeforeUnload();
       univerAPIRef.current?.dispose();
       isInitializedRef.current = false;
     };
-  }, []); // Mount once
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Compact header bar */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-muted/30 shrink-0">
         {lessonSlug && (
           <Link to={`/learn/${lessonSlug}`} target="_self">
@@ -159,9 +166,36 @@ export default function FullSpreadsheet() {
           )}
         </div>
       </div>
-
-      {/* Spreadsheet fills remaining space */}
       <div ref={containerRef} className="flex-1 min-h-0" />
     </div>
   );
+}
+
+/** Extract cellData from live Univer API for persistence */
+function extractCellDataFromAPI(
+  univerAPI: FUniver,
+  rowCount: number,
+  colCount: number
+): Record<number, Record<number, { v: string }>> | null {
+  try {
+    const workbook = univerAPI.getActiveWorkbook();
+    if (!workbook) return null;
+    const sheet = workbook.getActiveSheet();
+    if (!sheet) return null;
+    const range = sheet.getRange(0, 0, rowCount, colCount);
+    const values = range.getValues();
+    const cellData: Record<number, Record<number, { v: string }>> = {};
+    values.forEach((row, ri) => {
+      row.forEach((cell, ci) => {
+        const v = cell === null || cell === undefined ? "" : String(cell);
+        if (v !== "") {
+          if (!cellData[ri]) cellData[ri] = {};
+          cellData[ri][ci] = { v };
+        }
+      });
+    });
+    return cellData;
+  } catch {
+    return null;
+  }
 }

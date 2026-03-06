@@ -14,6 +14,7 @@ import {
   SheetData, 
   arrayToCellData 
 } from "./UniverSpreadsheet";
+import { clearWorkbookSnapshot } from "@/lib/workbookPersistence";
 
 interface ValidationResult {
   status: "correct" | "partial" | "incorrect";
@@ -31,27 +32,19 @@ interface UniverInteractiveLessonProps {
   lessonSlug?: string;
 }
 
-// Default validation function - can be swapped per lesson
 function validateSpreadsheetData(
   currentData: string[][],
   _expectedData: string[][],
   _rules: string[]
 ): ValidationResult {
   const results: { passed: boolean; message: string }[] = [];
-  
-  // Check headers
   const firstRow = currentData[0] || [];
   const nonEmptyHeaders = firstRow.filter(h => h.trim() !== "");
   if (nonEmptyHeaders.length < 3) {
-    results.push({ 
-      passed: false, 
-      message: "First row should contain at least 3 column headers (e.g., Date, Description, Amount)" 
-    });
+    results.push({ passed: false, message: "First row should contain at least 3 column headers (e.g., Date, Description, Amount)" });
   } else {
     results.push({ passed: true, message: "Headers look good!" });
   }
-  
-  // Check for blank rows in middle of data
   let dataStarted = false;
   let blankRowsInData = 0;
   for (let i = 0; i < currentData.length; i++) {
@@ -63,15 +56,10 @@ function validateSpreadsheetData(
     }
   }
   if (blankRowsInData > 0) {
-    results.push({ 
-      passed: false, 
-      message: `Found ${blankRowsInData} blank row(s) within your data - avoid gaps in data` 
-    });
+    results.push({ passed: false, message: `Found ${blankRowsInData} blank row(s) within your data - avoid gaps in data` });
   } else {
     results.push({ passed: true, message: "No blank rows in data!" });
   }
-  
-  // Check for multiple values in single cells
   const problematicCells: string[] = [];
   for (let r = 0; r < currentData.length; r++) {
     for (let c = 0; c < currentData[r].length; c++) {
@@ -82,47 +70,24 @@ function validateSpreadsheetData(
     }
   }
   if (problematicCells.length > 0) {
-    results.push({ 
-      passed: false, 
-      message: `Cells ${problematicCells.join(", ")} appear to contain multiple values - each cell should have one value` 
-    });
+    results.push({ passed: false, message: `Cells ${problematicCells.join(", ")} appear to contain multiple values - each cell should have one value` });
   } else {
     results.push({ passed: true, message: "Single values per cell - good practice!" });
   }
-  
-  // Check minimum data rows
   const dataRows = currentData.filter(row => row.some(cell => cell.trim() !== ""));
   if (dataRows.length < 2) {
-    results.push({ 
-      passed: false, 
-      message: "Add at least one header row and one data row" 
-    });
+    results.push({ passed: false, message: "Add at least one header row and one data row" });
   } else {
     results.push({ passed: true, message: "Data structure looks complete!" });
   }
-
-  // Summarize results
   const failed = results.filter(r => !r.passed);
   const passed = results.filter(r => r.passed);
-  
   if (failed.length === 0) {
-    return { 
-      status: "correct", 
-      message: "✅ Excellent! Your spreadsheet is correctly structured.", 
-      details: passed.map(r => r.message) 
-    };
+    return { status: "correct", message: "✅ Excellent! Your spreadsheet is correctly structured.", details: passed.map(r => r.message) };
   } else if (failed.length <= 1) {
-    return { 
-      status: "partial", 
-      message: "⚠️ Almost there! Just a few things to fix:", 
-      details: failed.map(r => r.message) 
-    };
+    return { status: "partial", message: "⚠️ Almost there! Just a few things to fix:", details: failed.map(r => r.message) };
   }
-  return { 
-    status: "incorrect", 
-    message: "❌ Let's work on the structure:", 
-    details: failed.map(r => r.message) 
-  };
+  return { status: "incorrect", message: "❌ Let's work on the structure:", details: failed.map(r => r.message) };
 }
 
 export function UniverInteractiveLesson({
@@ -139,9 +104,8 @@ export function UniverInteractiveLesson({
   
   const [showModelAnswer, setShowModelAnswer] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
-  const [key, setKey] = useState(0); // For forcing re-render on reset
+  const [key, setKey] = useState(0);
 
-  // Convert initial data to Univer format
   const initialSheetData: SheetData = useMemo(() => ({
     id: "lesson-sheet",
     name: "Practice",
@@ -150,7 +114,6 @@ export function UniverInteractiveLesson({
     columnCount: Math.max(10, initialData[0]?.length + 3 || 6),
   }), [initialData]);
 
-  // Convert expected result to Univer format
   const modelSheetData: SheetData = useMemo(() => ({
     id: "model-sheet",
     name: "Model Answer",
@@ -161,28 +124,25 @@ export function UniverInteractiveLesson({
 
   const handleCheckAnswer = useCallback(async () => {
     if (!spreadsheetRef.current) return;
-    
-    // End editing first to commit any pending cell edits
     await spreadsheetRef.current.endEditing();
-    
     const dataArray = spreadsheetRef.current.getDataArray();
     if (!dataArray) {
-      setValidationResult({
-        status: "incorrect",
-        message: "❌ Could not read spreadsheet data. Please try again.",
-      });
+      setValidationResult({ status: "incorrect", message: "❌ Could not read spreadsheet data. Please try again." });
       return;
     }
-    
     const result = validateSpreadsheetData(dataArray, expectedResult, validationRules);
     setValidationResult(result);
   }, [expectedResult, validationRules]);
 
   const handleReset = useCallback(() => {
+    // Clear persisted state so the spreadsheet reverts to initial data
+    if (lessonSlug) {
+      clearWorkbookSnapshot(lessonSlug);
+    }
     setShowModelAnswer(false);
     setValidationResult(null);
-    setKey(prev => prev + 1); // Force re-mount of spreadsheet
-  }, []);
+    setKey(prev => prev + 1);
+  }, [lessonSlug]);
 
   const handleRevealAnswer = useCallback(() => {
     setShowModelAnswer(true);
@@ -191,7 +151,6 @@ export function UniverInteractiveLesson({
 
   return (
     <div className="space-y-6">
-      {/* Task Instructions */}
       <div className="bg-info/10 border border-info/20 rounded-lg p-4">
         <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
           <Check className="h-5 w-5 text-info" />
@@ -200,7 +159,6 @@ export function UniverInteractiveLesson({
         <p className="text-muted-foreground">{instructions}</p>
       </div>
 
-      {/* Model Answer Alert */}
       {showModelAnswer && (
         <Alert className="border-success/50 bg-success/10">
           <CheckCircle className="h-4 w-4 text-success" />
@@ -211,7 +169,6 @@ export function UniverInteractiveLesson({
         </Alert>
       )}
 
-      {/* Spreadsheet - User's workspace OR Model Answer */}
       <div className="univer-wrapper">
         {showModelAnswer ? (
           <UniverSpreadsheet
@@ -232,13 +189,11 @@ export function UniverInteractiveLesson({
         )}
       </div>
 
-      {/* Keyboard Tips */}
       <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
         <strong>Keyboard shortcuts:</strong> Arrow keys to navigate • Enter to edit • Tab to move right • 
         Ctrl+C/V to copy/paste • Type formulas like =SUM(A1:A5)
       </div>
 
-      {/* Validation Result */}
       {validationResult && !showModelAnswer && (
         <Alert 
           variant={validationResult.status === "incorrect" ? "destructive" : "default"}
@@ -265,7 +220,6 @@ export function UniverInteractiveLesson({
         </Alert>
       )}
 
-      {/* Action Buttons */}
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" onClick={handleReset} className="gap-2">
           <RotateCcw className="h-4 w-4" />
@@ -288,7 +242,6 @@ export function UniverInteractiveLesson({
         </Button>
       </div>
 
-      {/* Hints Accordion */}
       <Accordion type="single" collapsible className="w-full">
         {hints.map((hint, i) => (
           <AccordionItem key={i} value={`hint-${i}`}>
@@ -307,7 +260,6 @@ export function UniverInteractiveLesson({
         ))}
       </Accordion>
 
-      {/* Answer Explanation - shown after revealing */}
       {showModelAnswer && (
         <div className="bg-success/10 border border-success/30 rounded-lg p-4">
           <h4 className="font-semibold text-success mb-2 flex items-center gap-2">
