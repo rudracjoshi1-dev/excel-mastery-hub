@@ -234,6 +234,24 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 
         univerAPI.createWorkbook(workbookData);
 
+        // Restore persisted conditional formatting rules if available
+        if (hadSnapshot && lessonSlug) {
+          const snapshot = loadWorkbookSnapshot(lessonSlug);
+          if (snapshot?.cfRules && snapshot.cfRules.length > 0) {
+            try {
+              const workbook = univerAPI.getActiveWorkbook();
+              const sheet = workbook?.getActiveSheet();
+              if (sheet && typeof (sheet as any).addConditionalFormattingRule === 'function') {
+                for (const rule of snapshot.cfRules) {
+                  (sheet as any).addConditionalFormattingRule(rule);
+                }
+              }
+            } catch (e) {
+              console.warn("[UniverSpreadsheet] failed to restore CF rules:", e);
+            }
+          }
+        }
+
         // If no snapshot existed, persist the initial data so the Full Spreadsheet
         // can load it immediately without requiring the user to edit first.
         if (lessonSlug && !hadSnapshot && initialData?.cellData) {

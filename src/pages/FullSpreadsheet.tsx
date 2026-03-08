@@ -148,7 +148,16 @@ export default function FullSpreadsheet() {
         const { rowCount, columnCount } = dimensionsRef.current;
         const extracted = extractCellDataFromAPI(univerAPIRef.current, rowCount, columnCount);
         if (extracted) {
-          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount);
+          // Also extract CF rules if available
+          let cfRules: any[] = [];
+          try {
+            const workbook = univerAPIRef.current.getActiveWorkbook();
+            const sheet = workbook?.getActiveSheet();
+            if (sheet && typeof (sheet as any).getConditionalFormattingRules === 'function') {
+              cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
+            }
+          } catch { /* CF plugin may not be loaded */ }
+          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules);
         }
       }
     };
