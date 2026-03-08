@@ -280,7 +280,7 @@ export default function LessonPage() {
 
           {/* Main content: full or placeholder */}
           {hasFullContent ? (
-            <FullLessonContent lesson={fullContent} />
+            <FullLessonContent lesson={fullContent} phase={phase} />
           ) : meta ? (
             <PlaceholderContent meta={meta} />
           ) : null}
