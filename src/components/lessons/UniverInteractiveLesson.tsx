@@ -172,7 +172,7 @@ export function UniverInteractiveLesson({
       <div className="univer-wrapper">
         {showModelAnswer ? (
           <UniverSpreadsheet
-            key={`model-${key}`}
+            key={`model-${lessonSlug}-${key}`}
             ref={modelSpreadsheetRef}
             initialData={modelSheetData}
             height={450}
@@ -180,7 +180,7 @@ export function UniverInteractiveLesson({
           />
         ) : (
           <UniverSpreadsheet
-            key={`practice-${key}`}
+            key={`practice-${lessonSlug}-${key}`}
             ref={spreadsheetRef}
             initialData={initialSheetData}
             height={450}
