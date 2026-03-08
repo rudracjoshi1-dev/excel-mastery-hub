@@ -84,7 +84,7 @@ function extractCellData(univerAPI: FUniver, rowCount: number, colCount: number)
 }
 
 export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsheetProps>(
-  ({ initialData, height = 400, readOnly = false, lessonSlug, onChange }, ref) => {
+  ({ initialData, height = 400, readOnly = false, lessonSlug, phase = 0, onChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const univerAPIRef = useRef<FUniver | null>(null);
     const univerInstanceRef = useRef<any>(null);
