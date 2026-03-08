@@ -42,6 +42,7 @@
         "@univerjs/preset-sheets-filter": "^0.15.2",
         "@univerjs/presets": "^0.15.2",
         "@univerjs/sheets": "^0.15.2",
+        "@univerjs/sheets-conditional-formatting-ui": "0.15.2",
         "@univerjs/sheets-filter": "^0.15.2",
         "@univerjs/sheets-filter-ui": "^0.15.2",
         "@univerjs/sheets-formula": "^0.15.2",
