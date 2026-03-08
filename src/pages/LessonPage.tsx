@@ -16,7 +16,7 @@ import {
 /**
  * Renders a full lesson with written content (from lessons.ts).
  */
-function FullLessonContent({ lesson }: { lesson: LessonData }) {
+function FullLessonContent({ lesson, phase = 0 }: { lesson: LessonData; phase?: number }) {
   return (
     <>
       {/* Learning Goals */}
