@@ -183,34 +183,20 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         const presets: any[] = [UniverSheetsCorePreset({ container })];
         const localesToMerge: Record<string, any>[] = [UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS];
 
-        // Load CF engine-only plugin for phase 6-7 so formatting applied in
-        // Full Mode is rendered, but without exposing the CF toolbar/menu.
+        // Load full CF preset for phase 6-7 so formatting applied in
+        // Full Mode is rendered. The CF menu/toolbar is hidden via CSS below.
         if (phase >= 6) {
           try {
-            const cfMod = await import("@univerjs/sheets-conditional-formatting");
-            // Register engine-only plugin after Univer is created (see below)
-            (container as any).__cfPlugin = cfMod.UniverSheetsConditionalFormattingPlugin;
+            const [cfPresetMod, cfLocaleMod] = await Promise.all([
+              import("@univerjs/preset-sheets-conditional-formatting"),
+              import("@univerjs/preset-sheets-conditional-formatting/locales/en-US"),
+            ]);
+            await import("@univerjs/preset-sheets-conditional-formatting/lib/index.css");
+            presets.push(cfPresetMod.UniverSheetsConditionalFormattingPreset());
+            localesToMerge.push(cfLocaleMod.default ?? cfLocaleMod);
           } catch (e) {
-            console.error("[UniverSpreadsheet] failed to load CF plugin:", e);
+            console.error("[UniverSpreadsheet] failed to load CF preset:", e);
           }
-        }
-
-        const mergedLocales = mergeLocales(...localesToMerge);
-
-        const { univerAPI, univer } = createUniver({
-          locale: LocaleType.EN_US,
-          locales: { [LocaleType.EN_US]: mergedLocales },
-          presets,
-        });
-
-        univer.registerPlugin(UniverSheetsSortPlugin);
-        univer.registerPlugin(UniverSheetsSortUIPlugin);
-
-        // Register CF engine plugin (no UI) if it was loaded
-        const cfPlugin = (container as any).__cfPlugin;
-        if (cfPlugin) {
-          univer.registerPlugin(cfPlugin);
-          delete (container as any).__cfPlugin;
         }
 
         univerAPIRef.current = univerAPI;
