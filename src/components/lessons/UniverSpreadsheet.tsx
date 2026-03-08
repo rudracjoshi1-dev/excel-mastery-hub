@@ -206,6 +206,13 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         univer.registerPlugin(UniverSheetsSortPlugin);
         univer.registerPlugin(UniverSheetsSortUIPlugin);
 
+        // Register CF engine plugin (no UI) if it was loaded
+        const cfPlugin = (container as any).__cfPlugin;
+        if (cfPlugin) {
+          univer.registerPlugin(cfPlugin);
+          delete (container as any).__cfPlugin;
+        }
+
         univerAPIRef.current = univerAPI;
         univerInstanceRef.current = univer;
 
