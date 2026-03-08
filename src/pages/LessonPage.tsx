@@ -16,7 +16,7 @@ import {
 /**
  * Renders a full lesson with written content (from lessons.ts).
  */
-function FullLessonContent({ lesson }: { lesson: LessonData }) {
+function FullLessonContent({ lesson, phase = 0 }: { lesson: LessonData; phase?: number }) {
   return (
     <>
       {/* Learning Goals */}
@@ -114,6 +114,7 @@ function FullLessonContent({ lesson }: { lesson: LessonData }) {
           answerExplanation={lesson.answerExplanation}
           validationRules={lesson.interactiveTask.validationRules}
           lessonSlug={lesson.slug}
+          phase={phase}
         />
       </section>
 
@@ -200,6 +201,7 @@ function PlaceholderContent({ meta }: { meta: LessonMeta }) {
           answerExplanation="Detailed explanations will be available when the lesson content is published."
           validationRules={[]}
           lessonSlug={meta.parentSlug ? `${meta.parentSlug}/${meta.slug}` : meta.slug}
+          phase={meta.phase}
         />
       </section>
 
@@ -278,7 +280,7 @@ export default function LessonPage() {
 
           {/* Main content: full or placeholder */}
           {hasFullContent ? (
-            <FullLessonContent lesson={fullContent} />
+            <FullLessonContent lesson={fullContent} phase={phase} />
           ) : meta ? (
             <PlaceholderContent meta={meta} />
           ) : null}

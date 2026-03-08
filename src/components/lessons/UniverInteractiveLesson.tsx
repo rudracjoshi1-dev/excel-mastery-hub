@@ -30,6 +30,8 @@ interface UniverInteractiveLessonProps {
   answerExplanation: string;
   validationRules: string[];
   lessonSlug?: string;
+  /** Phase number — forwarded to UniverSpreadsheet for plugin gating */
+  phase?: number;
 }
 
 function validateSpreadsheetData(
@@ -98,6 +100,7 @@ export function UniverInteractiveLesson({
   answerExplanation,
   validationRules,
   lessonSlug,
+  phase = 0,
 }: UniverInteractiveLessonProps) {
   const spreadsheetRef = useRef<UniverSpreadsheetRef>(null);
   const modelSpreadsheetRef = useRef<UniverSpreadsheetRef>(null);
@@ -190,6 +193,7 @@ export function UniverInteractiveLesson({
             initialData={initialSheetData}
             height={450}
             lessonSlug={lessonSlug}
+            phase={phase}
           />
         )}
       </div>
