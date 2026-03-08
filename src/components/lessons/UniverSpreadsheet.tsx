@@ -303,7 +303,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     const spreadsheetHeight = typeof height === "number" ? height - 36 : `calc(${height} - 36px)`;
 
     return (
-      <div className="univer-spreadsheet-wrapper rounded-lg overflow-hidden border border-border">
+      <div className="univer-spreadsheet-wrapper univer-embedded-mode rounded-lg overflow-hidden border border-border">
         {/* Tips Toolbar */}
         <div className="flex items-center gap-3 px-3 py-2 bg-muted/50 border-b border-border">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
