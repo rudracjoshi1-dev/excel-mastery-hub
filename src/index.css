@@ -315,3 +315,13 @@
     @apply bg-gradient-to-br from-primary/5 via-background to-accent/30;
   }
 }
+
+/* Hide conditional formatting toolbar/menu in embedded spreadsheet mode.
+   The CF preset is loaded for rendering only; editing CF is only in Full Mode. */
+.univer-embedded-mode [data-menu-id*="conditional-formatting"],
+.univer-embedded-mode [data-menu-id*="conditionalFormatting"],
+.univer-embedded-mode [data-menu-id*="CONDITIONAL_FORMATTING"],
+.univer-embedded-mode .univer-conditional-formatting-menu,
+.univer-embedded-mode [class*="conditional-formatting"] {
+  display: none !important;
+}

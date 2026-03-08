@@ -183,15 +183,19 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         const presets: any[] = [UniverSheetsCorePreset({ container })];
         const localesToMerge: Record<string, any>[] = [UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS];
 
-        // Load CF engine-only plugin for phase 6-7 so formatting applied in
-        // Full Mode is rendered, but without exposing the CF toolbar/menu.
+        // Load full CF preset for phase 6-7 so formatting applied in
+        // Full Mode is rendered. The CF menu/toolbar is hidden via CSS below.
         if (phase >= 6) {
           try {
-            const cfMod = await import("@univerjs/sheets-conditional-formatting");
-            // Register engine-only plugin after Univer is created (see below)
-            (container as any).__cfPlugin = cfMod.UniverSheetsConditionalFormattingPlugin;
+            const [cfPresetMod, cfLocaleMod] = await Promise.all([
+              import("@univerjs/preset-sheets-conditional-formatting"),
+              import("@univerjs/preset-sheets-conditional-formatting/locales/en-US"),
+            ]);
+            await import("@univerjs/preset-sheets-conditional-formatting/lib/index.css");
+            presets.push(cfPresetMod.UniverSheetsConditionalFormattingPreset());
+            localesToMerge.push(cfLocaleMod.default ?? cfLocaleMod);
           } catch (e) {
-            console.error("[UniverSpreadsheet] failed to load CF plugin:", e);
+            console.error("[UniverSpreadsheet] failed to load CF preset:", e);
           }
         }
 
@@ -205,13 +209,6 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 
         univer.registerPlugin(UniverSheetsSortPlugin);
         univer.registerPlugin(UniverSheetsSortUIPlugin);
-
-        // Register CF engine plugin (no UI) if it was loaded
-        const cfPlugin = (container as any).__cfPlugin;
-        if (cfPlugin) {
-          univer.registerPlugin(cfPlugin);
-          delete (container as any).__cfPlugin;
-        }
 
         univerAPIRef.current = univerAPI;
         univerInstanceRef.current = univer;
@@ -306,7 +303,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     const spreadsheetHeight = typeof height === "number" ? height - 36 : `calc(${height} - 36px)`;
 
     return (
-      <div className="univer-spreadsheet-wrapper rounded-lg overflow-hidden border border-border">
+      <div className="univer-spreadsheet-wrapper univer-embedded-mode rounded-lg overflow-hidden border border-border">
         {/* Tips Toolbar */}
         <div className="flex items-center gap-3 px-3 py-2 bg-muted/50 border-b border-border">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
