@@ -234,6 +234,24 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 
         univerAPI.createWorkbook(workbookData);
 
+        // Restore persisted conditional formatting rules if available
+        if (hadSnapshot && lessonSlug) {
+          const snapshot = loadWorkbookSnapshot(lessonSlug);
+          if (snapshot?.cfRules && snapshot.cfRules.length > 0) {
+            try {
+              const workbook = univerAPI.getActiveWorkbook();
+              const sheet = workbook?.getActiveSheet();
+              if (sheet && typeof (sheet as any).addConditionalFormattingRule === 'function') {
+                for (const rule of snapshot.cfRules) {
+                  (sheet as any).addConditionalFormattingRule(rule);
+                }
+              }
+            } catch (e) {
+              console.warn("[UniverSpreadsheet] failed to restore CF rules:", e);
+            }
+          }
+        }
+
         // If no snapshot existed, persist the initial data so the Full Spreadsheet
         // can load it immediately without requiring the user to edit first.
         if (lessonSlug && !hadSnapshot && initialData?.cellData) {
@@ -248,7 +266,15 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         if (lessonSlug && !skipSaveRef.current && univerAPIRef.current) {
           const extracted = extractCellData(univerAPIRef.current, rowCount, columnCount);
           if (extracted) {
-            saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount);
+            let cfRules: any[] = [];
+            try {
+              const workbook = univerAPIRef.current.getActiveWorkbook();
+              const sheet = workbook?.getActiveSheet();
+              if (sheet && typeof (sheet as any).getConditionalFormattingRules === 'function') {
+                cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
+              }
+            } catch { /* CF plugin may not be loaded */ }
+            saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules);
           }
         }
         univerAPIRef.current?.dispose();
@@ -263,7 +289,15 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         const colCount = initialDataRef.current?.columnCount || 10;
         const extracted = extractCellData(univerAPIRef.current, rowCount, colCount);
         if (extracted) {
-          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount);
+          let cfRules: any[] = [];
+          try {
+            const workbook = univerAPIRef.current.getActiveWorkbook();
+            const sheet = workbook?.getActiveSheet();
+            if (sheet && typeof (sheet as any).getConditionalFormattingRules === 'function') {
+              cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
+            }
+          } catch { /* CF plugin may not be loaded */ }
+          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount, cfRules);
         }
       }
     };

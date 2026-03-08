@@ -12,16 +12,18 @@ export function getStorageKey(lessonSlug: string): string {
 
 /**
  * Save a 2D cell-data snapshot to localStorage for a given lesson.
+ * Optionally includes conditional formatting rules.
  */
 export function saveWorkbookSnapshot(
   lessonSlug: string,
   cellData: Record<number, Record<number, { v?: string | number; f?: string }>>,
   rowCount: number,
-  columnCount: number
+  columnCount: number,
+  cfRules?: any[]
 ): void {
   try {
     const key = getStorageKey(lessonSlug);
-    const payload = JSON.stringify({ cellData, rowCount, columnCount, ts: Date.now() });
+    const payload = JSON.stringify({ cellData, rowCount, columnCount, cfRules: cfRules ?? [], ts: Date.now() });
     localStorage.setItem(key, payload);
   } catch (e) {
     console.warn("[workbookPersistence] save failed:", e);
@@ -32,6 +34,7 @@ export interface WorkbookSnapshot {
   cellData: Record<number, Record<number, { v?: string | number; f?: string }>>;
   rowCount: number;
   columnCount: number;
+  cfRules?: any[];
   ts: number;
 }
 
