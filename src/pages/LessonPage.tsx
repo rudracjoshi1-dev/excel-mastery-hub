@@ -201,6 +201,7 @@ function PlaceholderContent({ meta }: { meta: LessonMeta }) {
           answerExplanation="Detailed explanations will be available when the lesson content is published."
           validationRules={[]}
           lessonSlug={meta.parentSlug ? `${meta.parentSlug}/${meta.slug}` : meta.slug}
+          phase={meta.phase}
         />
       </section>
 

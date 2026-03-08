@@ -193,6 +193,7 @@ export function UniverInteractiveLesson({
             initialData={initialSheetData}
             height={450}
             lessonSlug={lessonSlug}
+            phase={phase}
           />
         )}
       </div>
