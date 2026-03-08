@@ -289,7 +289,15 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         const colCount = initialDataRef.current?.columnCount || 10;
         const extracted = extractCellData(univerAPIRef.current, rowCount, colCount);
         if (extracted) {
-          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount);
+          let cfRules: any[] = [];
+          try {
+            const workbook = univerAPIRef.current.getActiveWorkbook();
+            const sheet = workbook?.getActiveSheet();
+            if (sheet && typeof (sheet as any).getConditionalFormattingRules === 'function') {
+              cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
+            }
+          } catch { /* CF plugin may not be loaded */ }
+          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount, cfRules);
         }
       }
     };
