@@ -100,6 +100,7 @@ export function UniverInteractiveLesson({
   answerExplanation,
   validationRules,
   lessonSlug,
+  phase = 0,
 }: UniverInteractiveLessonProps) {
   const spreadsheetRef = useRef<UniverSpreadsheetRef>(null);
   const modelSpreadsheetRef = useRef<UniverSpreadsheetRef>(null);

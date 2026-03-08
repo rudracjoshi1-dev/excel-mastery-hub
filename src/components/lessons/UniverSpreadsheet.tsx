@@ -161,7 +161,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       if (!containerRef.current || isInitializedRef.current) return;
       isInitializedRef.current = true;
 
-      const mergedLocales = mergeLocales(UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS);
+      const container = containerRef.current;
 
       // Determine cell data: persisted snapshot takes priority over initial data
       let cellData = initialData?.cellData || {};
@@ -179,41 +179,66 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         }
       }
 
-      const { univerAPI, univer } = createUniver({
-        locale: LocaleType.EN_US,
-        locales: { [LocaleType.EN_US]: mergedLocales },
-        presets: [UniverSheetsCorePreset({ container: containerRef.current })],
-      });
+      async function init() {
+        const presets: any[] = [UniverSheetsCorePreset({ container })];
+        const localesToMerge: Record<string, any>[] = [UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS];
 
-      univer.registerPlugin(UniverSheetsSortPlugin);
-      univer.registerPlugin(UniverSheetsSortUIPlugin);
+        // Dynamically load conditional formatting for phase 6-7 so CF applied
+        // in Full Mode is visible in the embedded view.
+        if (phase >= 6) {
+          try {
+            const [cfPresetMod, cfLocaleMod] = await Promise.all([
+              import("@univerjs/preset-sheets-conditional-formatting"),
+              import("@univerjs/preset-sheets-conditional-formatting/locales/en-US"),
+            ]);
+            await import("@univerjs/preset-sheets-conditional-formatting/lib/index.css");
+            presets.push(cfPresetMod.UniverSheetsConditionalFormattingPreset());
+            localesToMerge.push(cfLocaleMod.default ?? cfLocaleMod);
+          } catch (e) {
+            console.error("[UniverSpreadsheet] failed to load CF preset:", e);
+          }
+        }
 
-      univerAPIRef.current = univerAPI;
-      univerInstanceRef.current = univer;
+        const mergedLocales = mergeLocales(...localesToMerge);
 
-      const workbookData = {
-        id: initialData?.id || "workbook-1",
-        sheetOrder: ["sheet-1"],
-        name: "Workbook",
-        appVersion: "1.0.0",
-        sheets: {
-          "sheet-1": {
-            id: "sheet-1",
-            name: initialData?.name || "Sheet1",
-            rowCount,
-            columnCount,
-            cellData,
+        const { univerAPI, univer } = createUniver({
+          locale: LocaleType.EN_US,
+          locales: { [LocaleType.EN_US]: mergedLocales },
+          presets,
+        });
+
+        univer.registerPlugin(UniverSheetsSortPlugin);
+        univer.registerPlugin(UniverSheetsSortUIPlugin);
+
+        univerAPIRef.current = univerAPI;
+        univerInstanceRef.current = univer;
+
+        const workbookData = {
+          id: initialData?.id || "workbook-1",
+          sheetOrder: ["sheet-1"],
+          name: "Workbook",
+          appVersion: "1.0.0",
+          sheets: {
+            "sheet-1": {
+              id: "sheet-1",
+              name: initialData?.name || "Sheet1",
+              rowCount,
+              columnCount,
+              cellData,
+            },
           },
-        },
-      };
+        };
 
-      univerAPI.createWorkbook(workbookData);
+        univerAPI.createWorkbook(workbookData);
 
-      // If no snapshot existed, persist the initial data so the Full Spreadsheet
-      // can load it immediately without requiring the user to edit first.
-      if (lessonSlug && !hadSnapshot && initialData?.cellData) {
-        saveWorkbookSnapshot(lessonSlug, cellData, rowCount, columnCount);
+        // If no snapshot existed, persist the initial data so the Full Spreadsheet
+        // can load it immediately without requiring the user to edit first.
+        if (lessonSlug && !hadSnapshot && initialData?.cellData) {
+          saveWorkbookSnapshot(lessonSlug, cellData, rowCount, columnCount);
+        }
       }
+
+      init();
 
       return () => {
         // Save current state before tearing down (unless reset was triggered)
@@ -223,7 +248,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
             saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount);
           }
         }
-        univerAPI.dispose();
+        univerAPIRef.current?.dispose();
         isInitializedRef.current = false;
       };
     }, []); // Mount once
