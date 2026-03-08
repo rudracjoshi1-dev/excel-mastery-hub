@@ -111,6 +111,18 @@ export default function FullSpreadsheet() {
         } catch (e) {
           console.error("[FullSpreadsheet] failed to load filter preset:", e);
         }
+
+        try {
+          const [cfPresetMod, cfLocaleMod] = await Promise.all([
+            import("@univerjs/preset-sheets-conditional-formatting"),
+            import("@univerjs/preset-sheets-conditional-formatting/locales/en-US"),
+          ]);
+          await import("@univerjs/preset-sheets-conditional-formatting/lib/index.css");
+          presets.push(cfPresetMod.UniverSheetsConditionalFormattingPreset());
+          localesToMerge.push(cfLocaleMod.default ?? cfLocaleMod);
+        } catch (e) {
+          console.error("[FullSpreadsheet] failed to load conditional formatting preset:", e);
+        }
       }
 
       const finalLocales = mergeLocales(...localesToMerge);
