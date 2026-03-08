@@ -30,6 +30,8 @@ interface UniverInteractiveLessonProps {
   answerExplanation: string;
   validationRules: string[];
   lessonSlug?: string;
+  /** Phase number — forwarded to UniverSpreadsheet for plugin gating */
+  phase?: number;
 }
 
 function validateSpreadsheetData(
