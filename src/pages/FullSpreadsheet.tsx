@@ -100,28 +100,48 @@ export default function FullSpreadsheet() {
       const localesToMerge: Record<string, any>[] = [UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS];
 
       if (shouldLoadHeavyPlugins(phase)) {
-        try {
-          const [filterPresetMod, filterLocaleMod] = await Promise.all([
-            import("@univerjs/preset-sheets-filter"),
-            import("@univerjs/preset-sheets-filter/locales/en-US"),
-          ]);
-          await import("@univerjs/preset-sheets-filter/lib/index.css");
-          presets.push(filterPresetMod.UniverSheetsFilterPreset());
-          localesToMerge.push(filterLocaleMod.default ?? filterLocaleMod);
-        } catch (e) {
-          console.error("[FullSpreadsheet] failed to load filter preset:", e);
-        }
+        // Load all advanced presets in parallel
+        const loadFilter = import("@univerjs/preset-sheets-filter")
+          .then(async (mod) => {
+            const locale = await import("@univerjs/preset-sheets-filter/locales/en-US");
+            await import("@univerjs/preset-sheets-filter/lib/index.css");
+            return { preset: mod.UniverSheetsFilterPreset(), locale: locale.default ?? locale };
+          }).catch(e => { console.error("[FullSpreadsheet] filter load failed:", e); return null; });
 
-        try {
-          const [cfPresetMod, cfLocaleMod] = await Promise.all([
-            import("@univerjs/preset-sheets-conditional-formatting"),
-            import("@univerjs/preset-sheets-conditional-formatting/locales/en-US"),
-          ]);
-          await import("@univerjs/preset-sheets-conditional-formatting/lib/index.css");
-          presets.push(cfPresetMod.UniverSheetsConditionalFormattingPreset());
-          localesToMerge.push(cfLocaleMod.default ?? cfLocaleMod);
-        } catch (e) {
-          console.error("[FullSpreadsheet] failed to load conditional formatting preset:", e);
+        const loadCF = import("@univerjs/preset-sheets-conditional-formatting")
+          .then(async (mod) => {
+            const locale = await import("@univerjs/preset-sheets-conditional-formatting/locales/en-US");
+            await import("@univerjs/preset-sheets-conditional-formatting/lib/index.css");
+            return { preset: mod.UniverSheetsConditionalFormattingPreset(), locale: locale.default ?? locale };
+          }).catch(e => { console.error("[FullSpreadsheet] CF load failed:", e); return null; });
+
+        const loadTable = import("@univerjs/preset-sheets-table")
+          .then(async (mod) => {
+            const locale = await import("@univerjs/preset-sheets-table/locales/en-US");
+            await import("@univerjs/preset-sheets-table/lib/index.css");
+            return { preset: mod.UniverSheetsTablePreset(), locale: locale.default ?? locale };
+          }).catch(e => { console.error("[FullSpreadsheet] table load failed:", e); return null; });
+
+        const loadDrawing = import("@univerjs/preset-sheets-drawing")
+          .then(async (mod) => {
+            const locale = await import("@univerjs/preset-sheets-drawing/locales/en-US");
+            await import("@univerjs/preset-sheets-drawing/lib/index.css");
+            return { preset: mod.UniverSheetsDrawingPreset(), locale: locale.default ?? locale };
+          }).catch(e => { console.error("[FullSpreadsheet] drawing load failed:", e); return null; });
+
+        const loadAdvanced = import("@univerjs/preset-sheets-advanced")
+          .then(async (mod) => {
+            const locale = await import("@univerjs/preset-sheets-advanced/locales/en-US");
+            await import("@univerjs/preset-sheets-advanced/lib/index.css");
+            return { preset: mod.UniverSheetsAdvancedPreset(), locale: locale.default ?? locale };
+          }).catch(e => { console.error("[FullSpreadsheet] advanced/charts load failed:", e); return null; });
+
+        const results = await Promise.all([loadFilter, loadCF, loadTable, loadDrawing, loadAdvanced]);
+        for (const r of results) {
+          if (r) {
+            presets.push(r.preset);
+            localesToMerge.push(r.locale);
+          }
         }
       }
 
