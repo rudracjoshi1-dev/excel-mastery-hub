@@ -199,6 +199,17 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           }
         }
 
+        const mergedLocales = mergeLocales(...localesToMerge);
+
+        const { univerAPI, univer } = createUniver({
+          locale: LocaleType.EN_US,
+          locales: { [LocaleType.EN_US]: mergedLocales },
+          presets,
+        });
+
+        univer.registerPlugin(UniverSheetsSortPlugin);
+        univer.registerPlugin(UniverSheetsSortUIPlugin);
+
         univerAPIRef.current = univerAPI;
         univerInstanceRef.current = univer;
 
