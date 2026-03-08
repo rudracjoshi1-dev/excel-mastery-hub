@@ -114,6 +114,7 @@ function FullLessonContent({ lesson }: { lesson: LessonData }) {
           answerExplanation={lesson.answerExplanation}
           validationRules={lesson.interactiveTask.validationRules}
           lessonSlug={lesson.slug}
+          phase={phase}
         />
       </section>
 
