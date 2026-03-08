@@ -205,6 +205,12 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 
       univerAPI.createWorkbook(workbookData);
 
+      // If no snapshot existed, persist the initial data so the Full Spreadsheet
+      // can load it immediately without requiring the user to edit first.
+      if (lessonSlug && !loadWorkbookSnapshot(lessonSlug) && initialData?.cellData) {
+        saveWorkbookSnapshot(lessonSlug, cellData, rowCount, columnCount);
+      }
+
       return () => {
         // Save current state before tearing down (unless reset was triggered)
         if (lessonSlug && !skipSaveRef.current && univerAPIRef.current) {

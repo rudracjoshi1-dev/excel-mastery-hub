@@ -41,15 +41,23 @@ export default function FullSpreadsheet() {
     return lessons.find((l) => l.slug === lessonSlug) ?? null;
   }, [lessonSlug]);
 
+  // Default placeholder data (matches PlaceholderContent in LessonPage)
+  const defaultPlaceholderData = [
+    ["Column A", "Column B", "Column C", "Column D"],
+    ["", "", "", ""],
+    ["", "", "", ""],
+    ["", "", "", ""],
+    ["", "", "", ""],
+  ];
+
   // Build workbook data: prefer persisted snapshot, fall back to lesson defaults
   const workbookData = useMemo(() => {
-    const defaultInitialData = lessonData?.interactiveTask?.initialData;
+    // Try legacy lesson data first, then fall back to placeholder
+    const defaultInitialData = lessonData?.interactiveTask?.initialData ?? defaultPlaceholderData;
     let cellData: Record<number, Record<number, { v?: string | number; f?: string }>> =
-      defaultInitialData ? arrayToCellData(defaultInitialData) : {};
-    let rowCount = defaultInitialData ? Math.max(50, defaultInitialData.length + 10) : 50;
-    let columnCount = defaultInitialData
-      ? Math.max(26, (defaultInitialData[0]?.length ?? 0) + 5)
-      : 26;
+      arrayToCellData(defaultInitialData);
+    let rowCount = Math.max(50, defaultInitialData.length + 10);
+    let columnCount = Math.max(26, (defaultInitialData[0]?.length ?? 0) + 5);
 
     // Load persisted snapshot if available
     if (lessonSlug) {
