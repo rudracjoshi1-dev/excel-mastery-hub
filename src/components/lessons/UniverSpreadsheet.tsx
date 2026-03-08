@@ -165,10 +165,12 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       let cellData = initialData?.cellData || {};
       let rowCount = initialData?.rowCount || 20;
       let columnCount = initialData?.columnCount || 10;
+      let hadSnapshot = false;
 
       if (lessonSlug) {
         const snapshot = loadWorkbookSnapshot(lessonSlug);
         if (snapshot) {
+          hadSnapshot = true;
           cellData = snapshot.cellData;
           rowCount = Math.max(rowCount, snapshot.rowCount);
           columnCount = Math.max(columnCount, snapshot.columnCount);
@@ -207,7 +209,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 
       // If no snapshot existed, persist the initial data so the Full Spreadsheet
       // can load it immediately without requiring the user to edit first.
-      if (lessonSlug && !loadWorkbookSnapshot(lessonSlug) && initialData?.cellData) {
+      if (lessonSlug && !hadSnapshot && initialData?.cellData) {
         saveWorkbookSnapshot(lessonSlug, cellData, rowCount, columnCount);
       }
 
