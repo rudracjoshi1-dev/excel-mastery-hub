@@ -135,6 +135,11 @@ export function UniverInteractiveLesson({
   }, [expectedResult, validationRules]);
 
   const handleReset = useCallback(() => {
+    // Tell the current instance to skip saving on unmount so dirty data
+    // doesn't overwrite the cleared snapshot.
+    if (spreadsheetRef.current) {
+      spreadsheetRef.current.reset();
+    }
     // Clear persisted state so the spreadsheet reverts to initial data
     if (lessonSlug) {
       clearWorkbookSnapshot(lessonSlug);
