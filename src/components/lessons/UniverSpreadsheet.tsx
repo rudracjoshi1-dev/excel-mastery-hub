@@ -30,6 +30,8 @@ export interface UniverSpreadsheetProps {
   height?: string | number;
   readOnly?: boolean;
   lessonSlug?: string;
+  /** Phase number — used to dynamically load CF plugin for phase 6-7 */
+  phase?: number;
   onChange?: (data: SheetData) => void;
 }
 
