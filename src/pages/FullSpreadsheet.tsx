@@ -258,9 +258,9 @@ export default function FullSpreadsheet() {
 
         // Listen for cell edits to refresh charts
         try {
-          const workbook = univerAPI.getActiveWorkbook();
-          if (workbook) {
-            workbook.onCellDataChange(() => {
+          const sheet = univerAPI.getActiveWorkbook()?.getActiveSheet();
+          if (sheet && typeof (sheet as any).onValueChange === "function") {
+            (sheet as any).onValueChange(() => {
               refreshChartData();
             });
           }
