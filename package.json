@@ -48,7 +48,6 @@
     "@univerjs/preset-sheets-conditional-formatting": "0.15.2",
     "@univerjs/preset-sheets-core": "^0.15.2",
     "@univerjs/preset-sheets-filter": "^0.15.2",
-    "@univerjs/preset-sheets-table": "0.15.2",
     "@univerjs/presets": "^0.15.2",
     "@univerjs/sheets": "^0.15.2",
     "@univerjs/sheets-conditional-formatting-ui": "0.15.2",
