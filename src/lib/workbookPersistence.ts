@@ -4,6 +4,8 @@
  * ensuring two-way sync: edits in either view are visible in the other.
  */
 
+import type { ChartConfig } from "@/components/charts/types";
+
 const STORAGE_PREFIX = "univer-workbook-";
 
 export function getStorageKey(lessonSlug: string): string {
@@ -12,18 +14,26 @@ export function getStorageKey(lessonSlug: string): string {
 
 /**
  * Save a 2D cell-data snapshot to localStorage for a given lesson.
- * Optionally includes conditional formatting rules.
+ * Optionally includes conditional formatting rules and chart configs.
  */
 export function saveWorkbookSnapshot(
   lessonSlug: string,
   cellData: Record<number, Record<number, { v?: string | number; f?: string }>>,
   rowCount: number,
   columnCount: number,
-  cfRules?: any[]
+  cfRules?: any[],
+  charts?: ChartConfig[]
 ): void {
   try {
     const key = getStorageKey(lessonSlug);
-    const payload = JSON.stringify({ cellData, rowCount, columnCount, cfRules: cfRules ?? [], ts: Date.now() });
+    const payload = JSON.stringify({
+      cellData,
+      rowCount,
+      columnCount,
+      cfRules: cfRules ?? [],
+      charts: charts ?? [],
+      ts: Date.now(),
+    });
     localStorage.setItem(key, payload);
   } catch (e) {
     console.warn("[workbookPersistence] save failed:", e);
@@ -35,6 +45,7 @@ export interface WorkbookSnapshot {
   rowCount: number;
   columnCount: number;
   cfRules?: any[];
+  charts?: ChartConfig[];
   ts: number;
 }
 

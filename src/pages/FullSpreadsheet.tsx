@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
@@ -19,10 +19,12 @@ import { saveWorkbookSnapshot, loadWorkbookSnapshot } from "@/lib/workbookPersis
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-/**
- * Full Spreadsheet page — opens in a new browser tab via /sheet?lesson=<slug>
- * Shares persisted workbook state with the embedded spreadsheet via localStorage.
- */
+// Chart system
+import type { ChartConfig, ChartType } from "@/components/charts/types";
+import { getSelectedRange, readChartData, generateChartId } from "@/components/charts/chartUtils";
+import ChartToolbar from "@/components/charts/ChartToolbar";
+import ChartPanel from "@/components/charts/ChartPanel";
+
 export default function FullSpreadsheet() {
   const [searchParams] = useSearchParams();
   const lessonSlug = searchParams.get("lesson");
@@ -31,17 +33,25 @@ export default function FullSpreadsheet() {
   const isInitializedRef = useRef(false);
   const dimensionsRef = useRef({ rowCount: 50, columnCount: 26 });
 
+  // Chart state
+  const [charts, setCharts] = useState<ChartConfig[]>([]);
+  const [selectedRange, setSelectedRange] = useState<string | null>(null);
+  const chartsRef = useRef<ChartConfig[]>([]);
+  chartsRef.current = charts;
+
   const lessonMeta = useMemo(() => {
     if (!lessonSlug) return null;
     return getLessonByPath(lessonSlug) ?? null;
   }, [lessonSlug]);
+
+  const phase = lessonMeta?.phase ?? 0;
+  const showCharts = shouldLoadHeavyPlugins(phase);
 
   const lessonData = useMemo(() => {
     if (!lessonSlug) return null;
     return lessons.find((l) => l.slug === lessonSlug) ?? null;
   }, [lessonSlug]);
 
-  // Default placeholder data (matches PlaceholderContent in LessonPage)
   const defaultPlaceholderData = [
     ["Column A", "Column B", "Column C", "Column D"],
     ["", "", "", ""],
@@ -50,16 +60,13 @@ export default function FullSpreadsheet() {
     ["", "", "", ""],
   ];
 
-  // Build workbook data: prefer persisted snapshot, fall back to lesson defaults
   const workbookData = useMemo(() => {
-    // Try legacy lesson data first, then fall back to placeholder
     const defaultInitialData = lessonData?.interactiveTask?.initialData ?? defaultPlaceholderData;
     let cellData: Record<number, Record<number, { v?: string | number; f?: string }>> =
       arrayToCellData(defaultInitialData);
     let rowCount = Math.max(50, defaultInitialData.length + 10);
     let columnCount = Math.max(26, (defaultInitialData[0]?.length ?? 0) + 5);
 
-    // Load persisted snapshot if available
     if (lessonSlug) {
       const snapshot = loadWorkbookSnapshot(lessonSlug);
       if (snapshot) {
@@ -88,19 +95,100 @@ export default function FullSpreadsheet() {
     };
   }, [lessonData, lessonSlug]);
 
+  // Helper: save current state
+  const saveState = useCallback(() => {
+    if (!lessonSlug || !univerAPIRef.current) return;
+    const { rowCount, columnCount } = dimensionsRef.current;
+    const extracted = extractCellDataFromAPI(univerAPIRef.current, rowCount, columnCount);
+    if (!extracted) return;
+
+    let cfRules: any[] = [];
+    try {
+      const workbook = univerAPIRef.current.getActiveWorkbook();
+      const sheet = workbook?.getActiveSheet();
+      if (sheet && typeof (sheet as any).getConditionalFormattingRules === "function") {
+        cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
+      }
+    } catch { /* CF plugin may not be loaded */ }
+
+    saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules, chartsRef.current);
+  }, [lessonSlug]);
+
+  // Refresh chart data from the live spreadsheet
+  const refreshChartData = useCallback(() => {
+    if (!univerAPIRef.current) return;
+    const api = univerAPIRef.current;
+    setCharts((prev) => {
+      const updated = prev.map((chart) => {
+        const data = readChartData(api, chart.range);
+        if (data) return { ...chart, categories: data.categories, series: data.series };
+        return chart;
+      });
+      chartsRef.current = updated;
+      return updated;
+    });
+  }, []);
+
+  // Create chart handler
+  const handleCreateChart = useCallback(
+    (type: ChartType, title: string) => {
+      if (!univerAPIRef.current || !selectedRange) return;
+      const data = readChartData(univerAPIRef.current, selectedRange);
+      if (!data) return;
+
+      const newChart: ChartConfig = {
+        id: generateChartId(),
+        type,
+        title,
+        range: selectedRange,
+        categories: data.categories,
+        series: data.series,
+      };
+
+      setCharts((prev) => {
+        const next = [...prev, newChart];
+        chartsRef.current = next;
+        return next;
+      });
+
+      // Save immediately
+      setTimeout(() => saveState(), 50);
+    },
+    [selectedRange, saveState]
+  );
+
+  const handleRemoveChart = useCallback(
+    (id: string) => {
+      setCharts((prev) => {
+        const next = prev.filter((c) => c.id !== id);
+        chartsRef.current = next;
+        return next;
+      });
+      setTimeout(() => saveState(), 50);
+    },
+    [saveState]
+  );
+
   useEffect(() => {
     if (!containerRef.current || isInitializedRef.current) return;
     isInitializedRef.current = true;
 
     const container = containerRef.current;
-    const phase = lessonMeta?.phase ?? 0;
+
+    // Load persisted charts
+    if (lessonSlug) {
+      const snapshot = loadWorkbookSnapshot(lessonSlug);
+      if (snapshot?.charts && snapshot.charts.length > 0) {
+        setCharts(snapshot.charts);
+        chartsRef.current = snapshot.charts;
+      }
+    }
 
     async function init() {
       const presets: any[] = [UniverSheetsCorePreset({ container })];
       const localesToMerge: Record<string, any>[] = [UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS];
 
       if (shouldLoadHeavyPlugins(phase)) {
-        // Load all advanced presets in parallel
         const loadFilter = import("@univerjs/preset-sheets-filter")
           .then(async (mod) => {
             const locale = await import("@univerjs/preset-sheets-filter/locales/en-US");
@@ -138,14 +226,14 @@ export default function FullSpreadsheet() {
       univerAPIRef.current = univerAPI;
       univerAPI.createWorkbook(workbookData);
 
-      // Restore persisted conditional formatting rules
+      // Restore CF rules
       if (lessonSlug) {
         const snapshot = loadWorkbookSnapshot(lessonSlug);
         if (snapshot?.cfRules && snapshot.cfRules.length > 0) {
           try {
             const workbook = univerAPI.getActiveWorkbook();
             const sheet = workbook?.getActiveSheet();
-            if (sheet && typeof (sheet as any).addConditionalFormattingRule === 'function') {
+            if (sheet && typeof (sheet as any).addConditionalFormattingRule === "function") {
               for (const rule of snapshot.cfRules) {
                 (sheet as any).addConditionalFormattingRule(rule);
               }
@@ -155,36 +243,45 @@ export default function FullSpreadsheet() {
           }
         }
       }
+
+      // Track selection changes for chart range
+      if (showCharts) {
+        try {
+          const workbook = univerAPI.getActiveWorkbook();
+          if (workbook) {
+            workbook.onSelectionChange(() => {
+              const range = getSelectedRange(univerAPI);
+              setSelectedRange(range);
+            });
+          }
+        } catch { /* selection tracking optional */ }
+
+        // Listen for cell edits to refresh charts
+        try {
+          const sheet = univerAPI.getActiveWorkbook()?.getActiveSheet();
+          if (sheet && typeof (sheet as any).onValueChange === "function") {
+            (sheet as any).onValueChange(() => {
+              refreshChartData();
+            });
+          }
+        } catch { /* cell change tracking optional */ }
+      }
+
+      // Refresh chart data with live values after init
+      if (showCharts && chartsRef.current.length > 0) {
+        setTimeout(() => refreshChartData(), 200);
+      }
     }
 
     init();
 
-    // Save state on unmount (tab close / navigation)
-    const handleBeforeUnload = () => {
-      if (lessonSlug && univerAPIRef.current) {
-        const { rowCount, columnCount } = dimensionsRef.current;
-        const extracted = extractCellDataFromAPI(univerAPIRef.current, rowCount, columnCount);
-        if (extracted) {
-          // Also extract CF rules if available
-          let cfRules: any[] = [];
-          try {
-            const workbook = univerAPIRef.current.getActiveWorkbook();
-            const sheet = workbook?.getActiveSheet();
-            if (sheet && typeof (sheet as any).getConditionalFormattingRules === 'function') {
-              cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
-            }
-          } catch { /* CF plugin may not be loaded */ }
-          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules);
-        }
-      }
-    };
+    const handleBeforeUnload = () => saveState();
 
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      // Also save on React unmount
-      handleBeforeUnload();
+      saveState();
       univerAPIRef.current?.dispose();
       isInitializedRef.current = false;
     };
@@ -192,6 +289,7 @@ export default function FullSpreadsheet() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
+      {/* Header bar */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-muted/30 shrink-0">
         {lessonSlug && (
           <Link to={`/learn/${lessonSlug}`} target="_self">
@@ -212,7 +310,21 @@ export default function FullSpreadsheet() {
           )}
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 min-h-0" />
+
+      {/* Chart toolbar (phase 6-7 only) */}
+      {showCharts && (
+        <ChartToolbar selectedRange={selectedRange} onCreateChart={handleCreateChart} />
+      )}
+
+      {/* Spreadsheet container */}
+      <div ref={containerRef} className="flex-1 min-h-0" style={{ minHeight: "40vh" }} />
+
+      {/* Charts area */}
+      {showCharts && charts.length > 0 && (
+        <div className="border-t border-border overflow-auto" style={{ maxHeight: "45vh" }}>
+          <ChartPanel charts={charts} onRemove={handleRemoveChart} />
+        </div>
+      )}
     </div>
   );
 }
