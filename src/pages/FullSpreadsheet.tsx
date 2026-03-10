@@ -115,28 +115,7 @@ export default function FullSpreadsheet() {
             return { preset: mod.UniverSheetsConditionalFormattingPreset(), locale: locale.default ?? locale };
           }).catch(e => { console.error("[FullSpreadsheet] CF load failed:", e); return null; });
 
-        const loadTable = import("@univerjs/preset-sheets-table")
-          .then(async (mod) => {
-            const locale = await import("@univerjs/preset-sheets-table/locales/en-US");
-            await import("@univerjs/preset-sheets-table/lib/index.css");
-            return { preset: mod.UniverSheetsTablePreset(), locale: locale.default ?? locale };
-          }).catch(e => { console.error("[FullSpreadsheet] table load failed:", e); return null; });
-
-        const loadDrawing = import("@univerjs/preset-sheets-drawing")
-          .then(async (mod) => {
-            const locale = await import("@univerjs/preset-sheets-drawing/locales/en-US");
-            await import("@univerjs/preset-sheets-drawing/lib/index.css");
-            return { preset: mod.UniverSheetsDrawingPreset(), locale: locale.default ?? locale };
-          }).catch(e => { console.error("[FullSpreadsheet] drawing load failed:", e); return null; });
-
-        const loadAdvanced = import("@univerjs/preset-sheets-advanced")
-          .then(async (mod) => {
-            const locale = await import("@univerjs/preset-sheets-advanced/locales/en-US");
-            await import("@univerjs/preset-sheets-advanced/lib/index.css");
-            return { preset: mod.UniverSheetsAdvancedPreset(), locale: locale.default ?? locale };
-          }).catch(e => { console.error("[FullSpreadsheet] advanced/charts load failed:", e); return null; });
-
-        const results = await Promise.all([loadFilter, loadCF, loadTable, loadDrawing, loadAdvanced]);
+        const results = await Promise.all([loadFilter, loadCF]);
         for (const r of results) {
           if (r) {
             presets.push(r.preset);
@@ -158,6 +137,24 @@ export default function FullSpreadsheet() {
 
       univerAPIRef.current = univerAPI;
       univerAPI.createWorkbook(workbookData);
+
+      // Restore persisted conditional formatting rules
+      if (lessonSlug) {
+        const snapshot = loadWorkbookSnapshot(lessonSlug);
+        if (snapshot?.cfRules && snapshot.cfRules.length > 0) {
+          try {
+            const workbook = univerAPI.getActiveWorkbook();
+            const sheet = workbook?.getActiveSheet();
+            if (sheet && typeof (sheet as any).addConditionalFormattingRule === 'function') {
+              for (const rule of snapshot.cfRules) {
+                (sheet as any).addConditionalFormattingRule(rule);
+              }
+            }
+          } catch (e) {
+            console.warn("[FullSpreadsheet] failed to restore CF rules:", e);
+          }
+        }
+      }
     }
 
     init();
