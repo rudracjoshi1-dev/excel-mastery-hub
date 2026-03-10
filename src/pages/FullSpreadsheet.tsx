@@ -137,6 +137,24 @@ export default function FullSpreadsheet() {
 
       univerAPIRef.current = univerAPI;
       univerAPI.createWorkbook(workbookData);
+
+      // Restore persisted conditional formatting rules
+      if (lessonSlug) {
+        const snapshot = loadWorkbookSnapshot(lessonSlug);
+        if (snapshot?.cfRules && snapshot.cfRules.length > 0) {
+          try {
+            const workbook = univerAPI.getActiveWorkbook();
+            const sheet = workbook?.getActiveSheet();
+            if (sheet && typeof (sheet as any).addConditionalFormattingRule === 'function') {
+              for (const rule of snapshot.cfRules) {
+                (sheet as any).addConditionalFormattingRule(rule);
+              }
+            }
+          } catch (e) {
+            console.warn("[FullSpreadsheet] failed to restore CF rules:", e);
+          }
+        }
+      }
     }
 
     init();
