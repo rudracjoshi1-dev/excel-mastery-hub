@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from "react";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
 import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
@@ -16,6 +16,10 @@ import { saveWorkbookSnapshot, loadWorkbookSnapshot } from "@/lib/workbookPersis
 
 // Icons for custom toolbar
 import { ArrowUpDown, Info, Maximize2 } from "lucide-react";
+
+// Chart system (lazy)
+import type { ChartConfig } from "@/components/charts/types";
+import ChartPanel from "@/components/charts/ChartPanel";
 
 export interface SheetData {
   id?: string;
@@ -92,6 +96,10 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     const initialDataRef = useRef(initialData);
     const skipSaveRef = useRef(false);
 
+    // Read-only charts from persistence (phase 6-7 embedded mode)
+    const [charts, setCharts] = useState<ChartConfig[]>([]);
+    const showCharts = phase >= 6;
+
     initialDataRef.current = initialData;
 
     // Expose methods via ref
@@ -124,7 +132,6 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         }
       },
       reset: () => {
-        // Mark to skip save on unmount so the cleared state isn't overwritten
         skipSaveRef.current = true;
         if (!univerAPIRef.current || !initialDataRef.current) return;
         const workbook = univerAPIRef.current.getActiveWorkbook();
@@ -151,6 +158,8 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               });
             });
           }
+          // Clear charts on reset
+          setCharts([]);
         } catch (e) {
           console.error("Error resetting spreadsheet:", e);
         }
@@ -163,7 +172,6 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 
       const container = containerRef.current;
 
-      // Determine cell data: persisted snapshot takes priority over initial data
       let cellData = initialData?.cellData || {};
       let rowCount = initialData?.rowCount || 20;
       let columnCount = initialData?.columnCount || 10;
@@ -176,6 +184,10 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           cellData = snapshot.cellData;
           rowCount = Math.max(rowCount, snapshot.rowCount);
           columnCount = Math.max(columnCount, snapshot.columnCount);
+          // Load persisted charts for read-only display
+          if (showCharts && snapshot.charts && snapshot.charts.length > 0) {
+            setCharts(snapshot.charts);
+          }
         }
       }
 
@@ -183,8 +195,6 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         const presets: any[] = [UniverSheetsCorePreset({ container })];
         const localesToMerge: Record<string, any>[] = [UniverPresetSheetsCoreEnUS, SheetsSortUIEnUS];
 
-        // Load full CF preset for phase 6-7 so formatting applied in
-        // Full Mode is rendered. The CF menu/toolbar is hidden via CSS below.
         if (phase >= 6) {
           try {
             const [cfPresetMod, cfLocaleMod] = await Promise.all([
@@ -231,7 +241,7 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
 
         univerAPI.createWorkbook(workbookData);
 
-        // Restore persisted conditional formatting rules if available
+        // Restore persisted conditional formatting rules
         if (hadSnapshot && lessonSlug) {
           const snapshot = loadWorkbookSnapshot(lessonSlug);
           if (snapshot?.cfRules && snapshot.cfRules.length > 0) {
@@ -249,8 +259,6 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           }
         }
 
-        // If no snapshot existed, persist the initial data so the Full Spreadsheet
-        // can load it immediately without requiring the user to edit first.
         if (lessonSlug && !hadSnapshot && initialData?.cellData) {
           saveWorkbookSnapshot(lessonSlug, cellData, rowCount, columnCount);
         }
@@ -259,7 +267,6 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
       init();
 
       return () => {
-        // Save current state before tearing down (unless reset was triggered)
         if (lessonSlug && !skipSaveRef.current && univerAPIRef.current) {
           const extracted = extractCellData(univerAPIRef.current, rowCount, columnCount);
           if (extracted) {
@@ -271,13 +278,15 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
                 cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
               }
             } catch { /* CF plugin may not be loaded */ }
-            saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules);
+            // Preserve existing charts when saving from embedded mode
+            const currentCharts = charts;
+            saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules, currentCharts);
           }
         }
         univerAPIRef.current?.dispose();
         isInitializedRef.current = false;
       };
-    }, []); // Mount once
+    }, []);
 
     // Save before navigating to Full Mode
     const handleOpenFullMode = () => {
@@ -294,12 +303,11 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
             }
           } catch { /* CF plugin may not be loaded */ }
-          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount, cfRules);
+          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount, cfRules, charts);
         }
       }
     };
 
-    const containerHeight = typeof height === "number" ? `${height}px` : height;
     const spreadsheetHeight = typeof height === "number" ? height - 36 : `calc(${height} - 36px)`;
 
     return (
@@ -341,6 +349,13 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           className="univer-spreadsheet-container"
           style={{ height: spreadsheetHeight, width: "100%" }}
         />
+
+        {/* Read-only charts in embedded mode (phase 6-7 only) */}
+        {showCharts && charts.length > 0 && (
+          <div className="border-t border-border">
+            <ChartPanel charts={charts} readOnly />
+          </div>
+        )}
       </div>
     );
   }
