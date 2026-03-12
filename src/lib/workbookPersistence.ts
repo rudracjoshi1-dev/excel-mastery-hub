@@ -51,6 +51,8 @@ export interface WorkbookSnapshot {
   columnCount: number;
   cfRules?: any[];
   charts?: ChartConfig[];
+  tables?: TableConfig[];
+  pivots?: PivotConfig[];
   ts: number;
 }
 
