@@ -26,7 +26,6 @@ import type { TableConfig, PivotConfig } from "@/components/tables/types";
 import { restoreTableStyling, readTableData, readFieldHeaders } from "@/components/tables/tableUtils";
 
 // Pivot (lazy)
-import { lazy, Suspense } from "react";
 const PivotPanel = lazy(() => import("@/components/pivot/PivotPanel"));
 
 export interface SheetData {
