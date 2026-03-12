@@ -282,6 +282,24 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           }
         }
 
+        // Restore table styling
+        if (hadSnapshot && lessonSlug) {
+          const snap2 = loadWorkbookSnapshot(lessonSlug);
+          if (snap2?.tables && snap2.tables.length > 0) {
+            setTimeout(() => restoreTableStyling(univerAPI, snap2.tables!), 100);
+          }
+          // Restore pivot data for read-only display
+          if (snap2?.pivots && snap2.pivots.length > 0) {
+            const pc = snap2.pivots[0];
+            const pData = readTableData(univerAPI, pc.sourceRange);
+            const pFields = readFieldHeaders(univerAPI, pc.sourceRange);
+            if (pData && pFields) {
+              setPivotData(pData);
+              setPivotFields(pFields);
+              setPivotSourceRange(pc.sourceRange);
+            }
+          }
+        }
         if (lessonSlug && !hadSnapshot && initialData?.cellData) {
           saveWorkbookSnapshot(lessonSlug, cellData, rowCount, columnCount);
         }
