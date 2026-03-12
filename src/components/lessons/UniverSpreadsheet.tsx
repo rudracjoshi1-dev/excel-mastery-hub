@@ -347,7 +347,11 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
             }
           } catch { /* CF plugin may not be loaded */ }
-          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount, cfRules, charts);
+          const snapshot = loadWorkbookSnapshot(lessonSlug);
+          saveWorkbookSnapshot(
+            lessonSlug, extracted, rowCount, colCount, cfRules,
+            charts, snapshot?.tables ?? [], snapshot?.pivots ?? []
+          );
         }
       }
     };
