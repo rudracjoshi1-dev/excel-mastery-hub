@@ -21,6 +21,14 @@ import { ArrowUpDown, Info, Maximize2 } from "lucide-react";
 import type { ChartConfig } from "@/components/charts/types";
 import ChartPanel from "@/components/charts/ChartPanel";
 
+// Table system
+import type { TableConfig, PivotConfig } from "@/components/tables/types";
+import { restoreTableStyling, readTableData, readFieldHeaders } from "@/components/tables/tableUtils";
+
+// Pivot (lazy)
+import { lazy, Suspense } from "react";
+const PivotPanel = lazy(() => import("@/components/pivot/PivotPanel"));
+
 export interface SheetData {
   id?: string;
   name?: string;
