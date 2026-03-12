@@ -104,9 +104,14 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     const initialDataRef = useRef(initialData);
     const skipSaveRef = useRef(false);
 
-    // Read-only charts from persistence (phase 6-7 embedded mode)
+    // Read-only charts and tables from persistence (phase 6-7 embedded mode)
     const [charts, setCharts] = useState<ChartConfig[]>([]);
-    const showCharts = phase >= 6;
+    const [tables, setTables] = useState<TableConfig[]>([]);
+    const [pivots, setPivots] = useState<PivotConfig[]>([]);
+    const [pivotData, setPivotData] = useState<Record<string, string | number>[] | null>(null);
+    const [pivotFields, setPivotFields] = useState<string[]>([]);
+    const [pivotSourceRange, setPivotSourceRange] = useState("");
+    const showAdvanced = phase >= 6;
 
     initialDataRef.current = initialData;
 
