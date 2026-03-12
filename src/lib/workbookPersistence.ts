@@ -23,7 +23,9 @@ export function saveWorkbookSnapshot(
   rowCount: number,
   columnCount: number,
   cfRules?: any[],
-  charts?: ChartConfig[]
+  charts?: ChartConfig[],
+  tables?: TableConfig[],
+  pivots?: PivotConfig[]
 ): void {
   try {
     const key = getStorageKey(lessonSlug);
@@ -33,6 +35,8 @@ export function saveWorkbookSnapshot(
       columnCount,
       cfRules: cfRules ?? [],
       charts: charts ?? [],
+      tables: tables ?? [],
+      pivots: pivots ?? [],
       ts: Date.now(),
     });
     localStorage.setItem(key, payload);
