@@ -319,9 +319,12 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
                 cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
               }
             } catch { /* CF plugin may not be loaded */ }
-            // Preserve existing charts when saving from embedded mode
-            const currentCharts = charts;
-            saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules, currentCharts);
+            // Preserve existing charts, tables, pivots when saving from embedded mode
+            const snapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
+            saveWorkbookSnapshot(
+              lessonSlug, extracted, rowCount, columnCount, cfRules,
+              charts, snapshot?.tables ?? [], snapshot?.pivots ?? []
+            );
           }
         }
         univerAPIRef.current?.dispose();
