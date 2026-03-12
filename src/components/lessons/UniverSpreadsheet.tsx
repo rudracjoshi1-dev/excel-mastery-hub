@@ -201,8 +201,16 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           rowCount = Math.max(rowCount, snapshot.rowCount);
           columnCount = Math.max(columnCount, snapshot.columnCount);
           // Load persisted charts for read-only display
-          if (showCharts && snapshot.charts && snapshot.charts.length > 0) {
+          if (showAdvanced && snapshot.charts && snapshot.charts.length > 0) {
             setCharts(snapshot.charts);
+          }
+          // Load persisted tables
+          if (showAdvanced && snapshot.tables && snapshot.tables.length > 0) {
+            setTables(snapshot.tables);
+          }
+          // Load persisted pivots
+          if (showAdvanced && snapshot.pivots && snapshot.pivots.length > 0) {
+            setPivots(snapshot.pivots);
           }
         }
       }
