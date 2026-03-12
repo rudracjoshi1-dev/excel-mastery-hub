@@ -171,8 +171,11 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               });
             });
           }
-          // Clear charts on reset
+          // Clear charts and tables on reset
           setCharts([]);
+          setTables([]);
+          setPivots([]);
+          setPivotData(null);
         } catch (e) {
           console.error("Error resetting spreadsheet:", e);
         }
