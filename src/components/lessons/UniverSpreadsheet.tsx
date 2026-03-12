@@ -399,10 +399,24 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         />
 
         {/* Read-only charts in embedded mode (phase 6-7 only) */}
-        {showCharts && charts.length > 0 && (
+        {showAdvanced && charts.length > 0 && (
           <div className="border-t border-border">
             <ChartPanel charts={charts} readOnly />
           </div>
+        )}
+
+        {/* Read-only pivot in embedded mode (phase 6-7 only) */}
+        {showAdvanced && pivotData && pivotFields.length > 0 && pivots.length > 0 && (
+          <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading pivot…</div>}>
+            <PivotPanel
+              fields={pivotFields}
+              data={pivotData}
+              sourceRange={pivotSourceRange}
+              initialConfig={pivots[0]}
+              onClose={() => {}}
+              readOnly
+            />
+          </Suspense>
         )}
       </div>
     );
