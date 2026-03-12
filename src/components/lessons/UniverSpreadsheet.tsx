@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from "react";
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState, lazy, Suspense } from "react";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
 import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
@@ -20,6 +20,13 @@ import { ArrowUpDown, Info, Maximize2 } from "lucide-react";
 // Chart system (lazy)
 import type { ChartConfig } from "@/components/charts/types";
 import ChartPanel from "@/components/charts/ChartPanel";
+
+// Table system
+import type { TableConfig, PivotConfig } from "@/components/tables/types";
+import { restoreTableStyling, readTableData, readFieldHeaders } from "@/components/tables/tableUtils";
+
+// Pivot (lazy)
+const PivotPanel = lazy(() => import("@/components/pivot/PivotPanel"));
 
 export interface SheetData {
   id?: string;
@@ -96,9 +103,14 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
     const initialDataRef = useRef(initialData);
     const skipSaveRef = useRef(false);
 
-    // Read-only charts from persistence (phase 6-7 embedded mode)
+    // Read-only charts and tables from persistence (phase 6-7 embedded mode)
     const [charts, setCharts] = useState<ChartConfig[]>([]);
-    const showCharts = phase >= 6;
+    const [tables, setTables] = useState<TableConfig[]>([]);
+    const [pivots, setPivots] = useState<PivotConfig[]>([]);
+    const [pivotData, setPivotData] = useState<Record<string, string | number>[] | null>(null);
+    const [pivotFields, setPivotFields] = useState<string[]>([]);
+    const [pivotSourceRange, setPivotSourceRange] = useState("");
+    const showAdvanced = phase >= 6;
 
     initialDataRef.current = initialData;
 
@@ -158,8 +170,11 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               });
             });
           }
-          // Clear charts on reset
+          // Clear charts and tables on reset
           setCharts([]);
+          setTables([]);
+          setPivots([]);
+          setPivotData(null);
         } catch (e) {
           console.error("Error resetting spreadsheet:", e);
         }
@@ -185,8 +200,16 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           rowCount = Math.max(rowCount, snapshot.rowCount);
           columnCount = Math.max(columnCount, snapshot.columnCount);
           // Load persisted charts for read-only display
-          if (showCharts && snapshot.charts && snapshot.charts.length > 0) {
+          if (showAdvanced && snapshot.charts && snapshot.charts.length > 0) {
             setCharts(snapshot.charts);
+          }
+          // Load persisted tables
+          if (showAdvanced && snapshot.tables && snapshot.tables.length > 0) {
+            setTables(snapshot.tables);
+          }
+          // Load persisted pivots
+          if (showAdvanced && snapshot.pivots && snapshot.pivots.length > 0) {
+            setPivots(snapshot.pivots);
           }
         }
       }
@@ -259,6 +282,24 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
           }
         }
 
+        // Restore table styling
+        if (hadSnapshot && lessonSlug) {
+          const snap2 = loadWorkbookSnapshot(lessonSlug);
+          if (snap2?.tables && snap2.tables.length > 0) {
+            setTimeout(() => restoreTableStyling(univerAPI, snap2.tables!), 100);
+          }
+          // Restore pivot data for read-only display
+          if (snap2?.pivots && snap2.pivots.length > 0) {
+            const pc = snap2.pivots[0];
+            const pData = readTableData(univerAPI, pc.sourceRange);
+            const pFields = readFieldHeaders(univerAPI, pc.sourceRange);
+            if (pData && pFields) {
+              setPivotData(pData);
+              setPivotFields(pFields);
+              setPivotSourceRange(pc.sourceRange);
+            }
+          }
+        }
         if (lessonSlug && !hadSnapshot && initialData?.cellData) {
           saveWorkbookSnapshot(lessonSlug, cellData, rowCount, columnCount);
         }
@@ -278,9 +319,12 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
                 cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
               }
             } catch { /* CF plugin may not be loaded */ }
-            // Preserve existing charts when saving from embedded mode
-            const currentCharts = charts;
-            saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules, currentCharts);
+            // Preserve existing charts, tables, pivots when saving from embedded mode
+            const snapshot = lessonSlug ? loadWorkbookSnapshot(lessonSlug) : null;
+            saveWorkbookSnapshot(
+              lessonSlug, extracted, rowCount, columnCount, cfRules,
+              charts, snapshot?.tables ?? [], snapshot?.pivots ?? []
+            );
           }
         }
         univerAPIRef.current?.dispose();
@@ -303,7 +347,11 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
               cfRules = (sheet as any).getConditionalFormattingRules() ?? [];
             }
           } catch { /* CF plugin may not be loaded */ }
-          saveWorkbookSnapshot(lessonSlug, extracted, rowCount, colCount, cfRules, charts);
+          const snapshot = loadWorkbookSnapshot(lessonSlug);
+          saveWorkbookSnapshot(
+            lessonSlug, extracted, rowCount, colCount, cfRules,
+            charts, snapshot?.tables ?? [], snapshot?.pivots ?? []
+          );
         }
       }
     };
@@ -351,10 +399,24 @@ export const UniverSpreadsheet = forwardRef<UniverSpreadsheetRef, UniverSpreadsh
         />
 
         {/* Read-only charts in embedded mode (phase 6-7 only) */}
-        {showCharts && charts.length > 0 && (
+        {showAdvanced && charts.length > 0 && (
           <div className="border-t border-border">
             <ChartPanel charts={charts} readOnly />
           </div>
+        )}
+
+        {/* Read-only pivot in embedded mode (phase 6-7 only) */}
+        {showAdvanced && pivotData && pivotFields.length > 0 && pivots.length > 0 && (
+          <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading pivot…</div>}>
+            <PivotPanel
+              fields={pivotFields}
+              data={pivotData}
+              sourceRange={pivotSourceRange}
+              initialConfig={pivots[0]}
+              onClose={() => {}}
+              readOnly
+            />
+          </Suspense>
         )}
       </div>
     );
