@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState, useCallback } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
@@ -22,8 +22,17 @@ import { Button } from "@/components/ui/button";
 // Chart system
 import type { ChartConfig, ChartType } from "@/components/charts/types";
 import { getSelectedRange, readChartData, generateChartId } from "@/components/charts/chartUtils";
-import ChartToolbar from "@/components/charts/ChartToolbar";
 import ChartPanel from "@/components/charts/ChartPanel";
+
+// Table system
+import type { TableConfig, PivotConfig } from "@/components/tables/types";
+import { createTable, restoreTableStyling, readTableData, readFieldHeaders } from "@/components/tables/tableUtils";
+
+// Data toolbar (combined)
+import DataToolbar from "@/components/DataToolbar";
+
+// Pivot table (lazy loaded)
+const PivotPanel = lazy(() => import("@/components/pivot/PivotPanel"));
 
 export default function FullSpreadsheet() {
   const [searchParams] = useSearchParams();
@@ -39,13 +48,27 @@ export default function FullSpreadsheet() {
   const chartsRef = useRef<ChartConfig[]>([]);
   chartsRef.current = charts;
 
+  // Table state
+  const [tables, setTables] = useState<TableConfig[]>([]);
+  const tablesRef = useRef<TableConfig[]>([]);
+  tablesRef.current = tables;
+
+  // Pivot state
+  const [pivots, setPivots] = useState<PivotConfig[]>([]);
+  const pivotsRef = useRef<PivotConfig[]>([]);
+  pivotsRef.current = pivots;
+  const [pivotData, setPivotData] = useState<Record<string, string | number>[] | null>(null);
+  const [pivotFields, setPivotFields] = useState<string[]>([]);
+  const [pivotSourceRange, setPivotSourceRange] = useState<string>("");
+  const [showPivot, setShowPivot] = useState(false);
+
   const lessonMeta = useMemo(() => {
     if (!lessonSlug) return null;
     return getLessonByPath(lessonSlug) ?? null;
   }, [lessonSlug]);
 
   const phase = lessonMeta?.phase ?? 0;
-  const showCharts = shouldLoadHeavyPlugins(phase);
+  const showDataTools = shouldLoadHeavyPlugins(phase);
 
   const lessonData = useMemo(() => {
     if (!lessonSlug) return null;
@@ -111,7 +134,7 @@ export default function FullSpreadsheet() {
       }
     } catch { /* CF plugin may not be loaded */ }
 
-    saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules, chartsRef.current);
+    saveWorkbookSnapshot(lessonSlug, extracted, rowCount, columnCount, cfRules, chartsRef.current, tablesRef.current, pivotsRef.current);
   }, [lessonSlug]);
 
   // Refresh chart data from the live spreadsheet
@@ -128,6 +151,13 @@ export default function FullSpreadsheet() {
       return updated;
     });
   }, []);
+
+  // Refresh pivot data when spreadsheet changes
+  const refreshPivotData = useCallback(() => {
+    if (!univerAPIRef.current || !showPivot || !pivotSourceRange) return;
+    const data = readTableData(univerAPIRef.current, pivotSourceRange);
+    if (data) setPivotData(data);
+  }, [showPivot, pivotSourceRange]);
 
   // Create chart handler
   const handleCreateChart = useCallback(
@@ -151,7 +181,6 @@ export default function FullSpreadsheet() {
         return next;
       });
 
-      // Save immediately
       setTimeout(() => saveState(), 50);
     },
     [selectedRange, saveState]
@@ -169,18 +198,85 @@ export default function FullSpreadsheet() {
     [saveState]
   );
 
+  // Create table handler
+  const handleCreateTable = useCallback(() => {
+    if (!univerAPIRef.current || !selectedRange) return;
+    const table = createTable(univerAPIRef.current, selectedRange);
+    if (!table) return;
+
+    setTables((prev) => {
+      const next = [...prev, table];
+      tablesRef.current = next;
+      return next;
+    });
+
+    setTimeout(() => saveState(), 50);
+  }, [selectedRange, saveState]);
+
+  // Create pivot handler
+  const handleCreatePivot = useCallback(() => {
+    if (!univerAPIRef.current || !selectedRange) return;
+
+    const data = readTableData(univerAPIRef.current, selectedRange);
+    const fields = readFieldHeaders(univerAPIRef.current, selectedRange);
+    if (!data || !fields || fields.length < 2) return;
+
+    setPivotData(data);
+    setPivotFields(fields);
+    setPivotSourceRange(selectedRange);
+    setShowPivot(true);
+
+    // Create initial pivot config
+    const config: PivotConfig = {
+      id: `pivot-${Date.now()}`,
+      sourceRange: selectedRange,
+      rowField: fields[0],
+      colField: fields[1],
+      valueField: fields[2] || fields[0],
+      aggregation: "sum",
+    };
+    setPivots([config]);
+    pivotsRef.current = [config];
+
+    setTimeout(() => saveState(), 50);
+  }, [selectedRange, saveState]);
+
+  const handlePivotConfigChange = useCallback(
+    (config: PivotConfig) => {
+      setPivots([config]);
+      pivotsRef.current = [config];
+      setTimeout(() => saveState(), 50);
+    },
+    [saveState]
+  );
+
+  const handleClosePivot = useCallback(() => {
+    setShowPivot(false);
+    setPivots([]);
+    pivotsRef.current = [];
+    setTimeout(() => saveState(), 50);
+  }, [saveState]);
+
   useEffect(() => {
     if (!containerRef.current || isInitializedRef.current) return;
     isInitializedRef.current = true;
 
     const container = containerRef.current;
 
-    // Load persisted charts
+    // Load persisted charts, tables, pivots
     if (lessonSlug) {
       const snapshot = loadWorkbookSnapshot(lessonSlug);
       if (snapshot?.charts && snapshot.charts.length > 0) {
         setCharts(snapshot.charts);
         chartsRef.current = snapshot.charts;
+      }
+      if (snapshot?.tables && snapshot.tables.length > 0) {
+        setTables(snapshot.tables);
+        tablesRef.current = snapshot.tables;
+      }
+      if (snapshot?.pivots && snapshot.pivots.length > 0) {
+        setPivots(snapshot.pivots);
+        pivotsRef.current = snapshot.pivots;
       }
     }
 
@@ -242,10 +338,28 @@ export default function FullSpreadsheet() {
             console.warn("[FullSpreadsheet] failed to restore CF rules:", e);
           }
         }
+
+        // Restore table styling
+        if (snapshot?.tables && snapshot.tables.length > 0) {
+          setTimeout(() => restoreTableStyling(univerAPI, snapshot.tables!), 100);
+        }
+
+        // Restore pivot from persisted config
+        if (snapshot?.pivots && snapshot.pivots.length > 0) {
+          const pc = snapshot.pivots[0];
+          const data = readTableData(univerAPI, pc.sourceRange);
+          const fields = readFieldHeaders(univerAPI, pc.sourceRange);
+          if (data && fields) {
+            setPivotData(data);
+            setPivotFields(fields);
+            setPivotSourceRange(pc.sourceRange);
+            setShowPivot(true);
+          }
+        }
       }
 
-      // Track selection changes for chart range
-      if (showCharts) {
+      // Track selection changes
+      if (showDataTools) {
         try {
           const workbook = univerAPI.getActiveWorkbook();
           if (workbook) {
@@ -256,19 +370,20 @@ export default function FullSpreadsheet() {
           }
         } catch { /* selection tracking optional */ }
 
-        // Listen for cell edits to refresh charts
+        // Listen for cell edits to refresh charts and pivots
         try {
           const sheet = univerAPI.getActiveWorkbook()?.getActiveSheet();
           if (sheet && typeof (sheet as any).onValueChange === "function") {
             (sheet as any).onValueChange(() => {
               refreshChartData();
+              refreshPivotData();
             });
           }
         } catch { /* cell change tracking optional */ }
       }
 
       // Refresh chart data with live values after init
-      if (showCharts && chartsRef.current.length > 0) {
+      if (showDataTools && chartsRef.current.length > 0) {
         setTimeout(() => refreshChartData(), 200);
       }
     }
@@ -311,19 +426,45 @@ export default function FullSpreadsheet() {
         </div>
       </div>
 
-      {/* Chart toolbar (phase 6-7 only) */}
-      {showCharts && (
-        <ChartToolbar selectedRange={selectedRange} onCreateChart={handleCreateChart} />
+      {/* Data Tools toolbar (phase 6-7 only) */}
+      {showDataTools && (
+        <DataToolbar
+          selectedRange={selectedRange}
+          onCreateChart={handleCreateChart}
+          onCreateTable={handleCreateTable}
+          onCreatePivot={handleCreatePivot}
+          hasActivePivot={showPivot}
+        />
       )}
 
       {/* Spreadsheet container */}
       <div ref={containerRef} className="flex-1 min-h-0" style={{ minHeight: "40vh" }} />
 
       {/* Charts area */}
-      {showCharts && charts.length > 0 && (
+      {showDataTools && charts.length > 0 && (
         <div className="border-t border-border overflow-auto" style={{ maxHeight: "45vh" }}>
           <ChartPanel charts={charts} onRemove={handleRemoveChart} />
         </div>
+      )}
+
+      {/* Pivot table area */}
+      {showDataTools && showPivot && pivotData && pivotFields.length > 0 && (
+        <Suspense
+          fallback={
+            <div className="border-t border-border p-4 text-sm text-muted-foreground">
+              Loading pivot table…
+            </div>
+          }
+        >
+          <PivotPanel
+            fields={pivotFields}
+            data={pivotData}
+            sourceRange={pivotSourceRange}
+            initialConfig={pivots[0]}
+            onConfigChange={handlePivotConfigChange}
+            onClose={handleClosePivot}
+          />
+        </Suspense>
       )}
     </div>
   );
