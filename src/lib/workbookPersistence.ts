@@ -5,6 +5,7 @@
  */
 
 import type { ChartConfig } from "@/components/charts/types";
+import type { TableConfig, PivotConfig } from "@/components/tables/types";
 
 const STORAGE_PREFIX = "univer-workbook-";
 
