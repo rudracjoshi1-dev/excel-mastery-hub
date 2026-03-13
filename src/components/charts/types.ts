@@ -10,4 +10,9 @@ export interface ChartConfig {
   /** Cached data snapshot for rendering in embedded mode */
   categories: string[];
   series: { name: string; data: number[] }[];
+  /** Floating position inside the spreadsheet container (pixels) */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }

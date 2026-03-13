@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 // Chart system
 import type { ChartConfig, ChartType } from "@/components/charts/types";
 import { getSelectedRange, readChartData, generateChartId } from "@/components/charts/chartUtils";
-import ChartPanel from "@/components/charts/ChartPanel";
+import FloatingChartLayer from "@/components/charts/FloatingChartLayer";
 
 // Table system
 import type { TableConfig, PivotConfig } from "@/components/tables/types";
@@ -31,7 +31,8 @@ import { createTable, restoreTableStyling, readTableData, readFieldHeaders } fro
 // Data toolbar (combined)
 import DataToolbar from "@/components/DataToolbar";
 
-// Pivot table (lazy loaded)
+// Pivot
+import { writePivotToCells, clearPivotCells, refreshPivotInCells } from "@/components/pivot/pivotCellWriter";
 const PivotPanel = lazy(() => import("@/components/pivot/PivotPanel"));
 
 export default function FullSpreadsheet() {
@@ -57,10 +58,10 @@ export default function FullSpreadsheet() {
   const [pivots, setPivots] = useState<PivotConfig[]>([]);
   const pivotsRef = useRef<PivotConfig[]>([]);
   pivotsRef.current = pivots;
-  const [pivotData, setPivotData] = useState<Record<string, string | number>[] | null>(null);
   const [pivotFields, setPivotFields] = useState<string[]>([]);
   const [pivotSourceRange, setPivotSourceRange] = useState<string>("");
   const [showPivot, setShowPivot] = useState(false);
+  const pivotDataRef = useRef<Record<string, string | number>[]>([]);
 
   const lessonMeta = useMemo(() => {
     if (!lessonSlug) return null;
@@ -152,12 +153,13 @@ export default function FullSpreadsheet() {
     });
   }, []);
 
-  // Refresh pivot data when spreadsheet changes
+  // Refresh pivot when spreadsheet changes
   const refreshPivotData = useCallback(() => {
-    if (!univerAPIRef.current || !showPivot || !pivotSourceRange) return;
-    const data = readTableData(univerAPIRef.current, pivotSourceRange);
-    if (data) setPivotData(data);
-  }, [showPivot, pivotSourceRange]);
+    if (!univerAPIRef.current || !showPivot || pivotsRef.current.length === 0) return;
+    const config = pivotsRef.current[0];
+    const { data } = refreshPivotInCells(univerAPIRef.current, config);
+    if (data) pivotDataRef.current = data;
+  }, [showPivot]);
 
   // Create chart handler
   const handleCreateChart = useCallback(
@@ -173,6 +175,11 @@ export default function FullSpreadsheet() {
         range: selectedRange,
         categories: data.categories,
         series: data.series,
+        // Position the chart floating over the spreadsheet
+        x: 320,
+        y: 40 + charts.length * 30,
+        width: 480,
+        height: 320,
       };
 
       setCharts((prev) => {
@@ -183,7 +190,19 @@ export default function FullSpreadsheet() {
 
       setTimeout(() => saveState(), 50);
     },
-    [selectedRange, saveState]
+    [selectedRange, saveState, charts.length]
+  );
+
+  const handleUpdateChart = useCallback(
+    (id: string, updates: Partial<ChartConfig>) => {
+      setCharts((prev) => {
+        const next = prev.map((c) => (c.id === id ? { ...c, ...updates } : c));
+        chartsRef.current = next;
+        return next;
+      });
+      setTimeout(() => saveState(), 50);
+    },
+    [saveState]
   );
 
   const handleRemoveChart = useCallback(
@@ -221,15 +240,18 @@ export default function FullSpreadsheet() {
     const fields = readFieldHeaders(univerAPIRef.current, selectedRange);
     if (!data || !fields || fields.length < 2) return;
 
-    setPivotData(data);
+    pivotDataRef.current = data;
     setPivotFields(fields);
     setPivotSourceRange(selectedRange);
     setShowPivot(true);
 
-    // Create initial pivot config
+    // Default destination cell: a few columns to the right of the data range
+    const defaultDest = "G2";
+
     const config: PivotConfig = {
       id: `pivot-${Date.now()}`,
       sourceRange: selectedRange,
+      destCell: defaultDest,
       rowField: fields[0],
       colField: fields[1],
       valueField: fields[2] || fields[0],
@@ -238,22 +260,44 @@ export default function FullSpreadsheet() {
     setPivots([config]);
     pivotsRef.current = [config];
 
+    // Write pivot results into cells
+    writePivotToCells(univerAPIRef.current, config, data);
+
     setTimeout(() => saveState(), 50);
   }, [selectedRange, saveState]);
 
   const handlePivotConfigChange = useCallback(
     (config: PivotConfig) => {
+      if (!univerAPIRef.current) return;
+
+      // Clear old pivot cells first
+      if (pivotsRef.current.length > 0 && pivotDataRef.current.length > 0) {
+        clearPivotCells(univerAPIRef.current, pivotsRef.current[0], pivotDataRef.current);
+      }
+
       setPivots([config]);
       pivotsRef.current = [config];
+
+      // Re-read source data and write new pivot
+      const data = readTableData(univerAPIRef.current, config.sourceRange);
+      if (data) {
+        pivotDataRef.current = data;
+        writePivotToCells(univerAPIRef.current, config, data);
+      }
+
       setTimeout(() => saveState(), 50);
     },
     [saveState]
   );
 
   const handleClosePivot = useCallback(() => {
+    if (univerAPIRef.current && pivotsRef.current.length > 0 && pivotDataRef.current.length > 0) {
+      clearPivotCells(univerAPIRef.current, pivotsRef.current[0], pivotDataRef.current);
+    }
     setShowPivot(false);
     setPivots([]);
     pivotsRef.current = [];
+    pivotDataRef.current = [];
     setTimeout(() => saveState(), 50);
   }, [saveState]);
 
@@ -267,8 +311,16 @@ export default function FullSpreadsheet() {
     if (lessonSlug) {
       const snapshot = loadWorkbookSnapshot(lessonSlug);
       if (snapshot?.charts && snapshot.charts.length > 0) {
-        setCharts(snapshot.charts);
-        chartsRef.current = snapshot.charts;
+        // Migrate old charts without position
+        const migrated = snapshot.charts.map((c, i) => ({
+          ...c,
+          x: c.x ?? 320,
+          y: c.y ?? (40 + i * 30),
+          width: c.width ?? 480,
+          height: c.height ?? 320,
+        }));
+        setCharts(migrated);
+        chartsRef.current = migrated;
       }
       if (snapshot?.tables && snapshot.tables.length > 0) {
         setTables(snapshot.tables);
@@ -344,16 +396,17 @@ export default function FullSpreadsheet() {
           setTimeout(() => restoreTableStyling(univerAPI, snapshot.tables!), 100);
         }
 
-        // Restore pivot from persisted config
+        // Restore pivot: write results into cells
         if (snapshot?.pivots && snapshot.pivots.length > 0) {
           const pc = snapshot.pivots[0];
           const data = readTableData(univerAPI, pc.sourceRange);
           const fields = readFieldHeaders(univerAPI, pc.sourceRange);
           if (data && fields) {
-            setPivotData(data);
+            pivotDataRef.current = data;
             setPivotFields(fields);
             setPivotSourceRange(pc.sourceRange);
             setShowPivot(true);
+            writePivotToCells(univerAPI, pc, data);
           }
         }
       }
@@ -437,28 +490,11 @@ export default function FullSpreadsheet() {
         />
       )}
 
-      {/* Spreadsheet container */}
-      <div ref={containerRef} className="flex-1 min-h-0" style={{ minHeight: "40vh" }} />
-
-      {/* Charts area */}
-      {showDataTools && charts.length > 0 && (
-        <div className="border-t border-border overflow-auto" style={{ maxHeight: "45vh" }}>
-          <ChartPanel charts={charts} onRemove={handleRemoveChart} />
-        </div>
-      )}
-
-      {/* Pivot table area */}
-      {showDataTools && showPivot && pivotData && pivotFields.length > 0 && (
-        <Suspense
-          fallback={
-            <div className="border-t border-border p-4 text-sm text-muted-foreground">
-              Loading pivot table…
-            </div>
-          }
-        >
+      {/* Pivot config panel (phase 6-7, inline toolbar style) */}
+      {showDataTools && showPivot && pivotFields.length > 0 && (
+        <Suspense fallback={null}>
           <PivotPanel
             fields={pivotFields}
-            data={pivotData}
             sourceRange={pivotSourceRange}
             initialConfig={pivots[0]}
             onConfigChange={handlePivotConfigChange}
@@ -466,6 +502,19 @@ export default function FullSpreadsheet() {
           />
         </Suspense>
       )}
+
+      {/* Spreadsheet container with floating chart overlay */}
+      <div className="relative flex-1 min-h-0" style={{ minHeight: "40vh" }}>
+        <div ref={containerRef} className="absolute inset-0" />
+        {/* Floating charts rendered over the spreadsheet */}
+        {showDataTools && (
+          <FloatingChartLayer
+            charts={charts}
+            onUpdate={handleUpdateChart}
+            onRemove={handleRemoveChart}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -12,6 +12,8 @@ export interface PivotConfig {
   id: string;
   /** Source range or table name */
   sourceRange: string;
+  /** Destination anchor cell e.g. "G2" where pivot output starts */
+  destCell: string;
   rowField: string;
   colField: string;
   valueField: string;
