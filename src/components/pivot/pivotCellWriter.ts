@@ -1,7 +1,7 @@
 import type { FUniver } from "@univerjs/presets";
 import type { PivotConfig } from "@/components/tables/types";
-import { computePivot, type PivotResult } from "./pivotUtils";
-import { readTableData, readFieldHeaders } from "@/components/tables/tableUtils";
+import { computePivot } from "./pivotUtils";
+import { readTableData } from "@/components/tables/tableUtils";
 
 /**
  * Parse a single cell reference like "G2" into {row, col}.
