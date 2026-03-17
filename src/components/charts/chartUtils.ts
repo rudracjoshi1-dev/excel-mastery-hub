@@ -145,46 +145,46 @@ export function buildEChartsOption(config: ChartConfig): any {
 export function getSelectedRange(univerAPI: FUniver): string | null {
   try {
     const workbook = univerAPI.getActiveWorkbook();
-    if (!workbook) { console.log("[getSelectedRange] no workbook"); return null; }
+    if (!workbook) return null;
     const sheet = workbook.getActiveSheet();
-    if (!sheet) { console.log("[getSelectedRange] no sheet"); return null; }
+    if (!sheet) return null;
     const selection = sheet.getSelection();
-    if (!selection) { console.log("[getSelectedRange] no selection"); return null; }
-    const range = selection.getActiveRange();
-    if (!range) { console.log("[getSelectedRange] no activeRange"); return null; }
-
-    // Debug: log all available methods/properties
-    console.log("[getSelectedRange] range type:", typeof range, "range:", range);
-    console.log("[getSelectedRange] getRow:", typeof range.getRow, "getColumn:", typeof range.getColumn, 
-                "getHeight:", typeof range.getHeight, "getWidth:", typeof range.getWidth);
+    if (!selection) return null;
     
-    // Also try getRange() which may return internal range object
-    const r = range as any;
-    console.log("[getSelectedRange] _range:", r._range, "_rangeData:", r._rangeData, "range.range:", r.range);
+    // In Univer 0.15.x, getActiveRange() may return null 
+    // Try getActiveRange first, then fall back to inspecting selection internals
+    let range = selection.getActiveRange();
     
-    let row: number, col: number, rowCount: number, colCount: number;
-    
-    // Try the standard API first
-    if (typeof range.getRow === "function") {
-      row = range.getRow();
-      col = range.getColumn();
-      rowCount = typeof range.getHeight === "function" ? range.getHeight() : 1;
-      colCount = typeof range.getWidth === "function" ? range.getWidth() : 1;
-      console.log("[getSelectedRange] standard API - row:", row, "col:", col, "h:", rowCount, "w:", colCount);
-    } else {
-      // Fallback
-      const rangeData = r._range || r._rangeData || r;
-      row = rangeData.startRow ?? 0;
-      col = rangeData.startColumn ?? 0;
-      rowCount = (rangeData.endRow ?? row) - row + 1;
-      colCount = (rangeData.endColumn ?? col) - col + 1;
+    if (!range) {
+      // Fallback: inspect selection internals
+      const sel = selection as any;
+      console.log("[getSelectedRange] selection keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(sel)));
+      console.log("[getSelectedRange] selection._selections:", sel._selections);
+      
+      // Try _selections array which contains raw range data
+      const selections = sel._selections;
+      if (selections && selections.length > 0) {
+        const s = selections[0];
+        const rangeData = s.range || s;
+        const row = rangeData.startRow ?? 0;
+        const col = rangeData.startColumn ?? 0;
+        const endRow = rangeData.endRow ?? row;
+        const endCol = rangeData.endColumn ?? col;
+        const startCell = `${colToLetter(col)}${row + 1}`;
+        const endCell = `${colToLetter(endCol)}${endRow + 1}`;
+        return `${startCell}:${endCell}`;
+      }
+      return null;
     }
+
+    const row = range.getRow();
+    const col = range.getColumn();
+    const rowCount = range.getHeight();
+    const colCount = range.getWidth();
 
     const startCell = `${colToLetter(col)}${row + 1}`;
     const endCell = `${colToLetter(col + colCount - 1)}${row + rowCount}`;
-    const result = `${startCell}:${endCell}`;
-    console.log("[getSelectedRange] result:", result);
-    return result;
+    return `${startCell}:${endCell}`;
   } catch (e) {
     console.error("[getSelectedRange] error:", e);
     return null;
