@@ -153,15 +153,35 @@ export function getSelectedRange(univerAPI: FUniver): string | null {
     const range = selection.getActiveRange();
     if (!range) return null;
 
-    const row = range.getRow();
-    const col = range.getColumn();
-    const rowCount = range.getHeight();
-    const colCount = range.getWidth();
+    // Try multiple APIs to get row/col info
+    let row: number, col: number, rowCount: number, colCount: number;
+    
+    if (typeof range.getRow === "function") {
+      row = range.getRow();
+      col = range.getColumn();
+      rowCount = typeof range.getHeight === "function" ? range.getHeight() : 1;
+      colCount = typeof range.getWidth === "function" ? range.getWidth() : 1;
+    } else {
+      // Fallback: try to access range object properties directly
+      const r = range as any;
+      console.log("[getSelectedRange] range object keys:", Object.keys(r), "range:", r);
+      // Try _range or _rangeData property
+      const rangeData = r._range || r._rangeData || r;
+      row = rangeData.startRow ?? rangeData.row ?? 0;
+      col = rangeData.startColumn ?? rangeData.col ?? rangeData.column ?? 0;
+      const endRow = rangeData.endRow ?? row;
+      const endCol = rangeData.endColumn ?? col;
+      rowCount = endRow - row + 1;
+      colCount = endCol - col + 1;
+    }
+
+    console.log("[getSelectedRange] row:", row, "col:", col, "rowCount:", rowCount, "colCount:", colCount);
 
     const startCell = `${colToLetter(col)}${row + 1}`;
     const endCell = `${colToLetter(col + colCount - 1)}${row + rowCount}`;
     return `${startCell}:${endCell}`;
-  } catch {
+  } catch (e) {
+    console.error("[getSelectedRange] error:", e);
     return null;
   }
 }
