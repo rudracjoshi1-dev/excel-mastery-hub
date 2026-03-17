@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 
 // Chart system
 import type { ChartConfig, ChartType } from "@/components/charts/types";
-import { getSelectedRange, readChartData, generateChartId } from "@/components/charts/chartUtils";
+import { getSelectedRange, selectionToRange, readChartData, generateChartId } from "@/components/charts/chartUtils";
 import FloatingChartLayer from "@/components/charts/FloatingChartLayer";
 
 // Table system
@@ -416,12 +416,41 @@ export default function FullSpreadsheet() {
         try {
           const workbook = univerAPI.getActiveWorkbook();
           if (workbook) {
-            workbook.onSelectionChange(() => {
-              const range = getSelectedRange(univerAPI);
-              setSelectedRange(range);
+            // onSelectionChange callback receives raw range objects directly
+            workbook.onSelectionChange((selections: any[]) => {
+              if (selections && selections.length > 0) {
+                const sel = selections[0];
+                // sel is { startRow, endRow, startColumn, endColumn }
+                if (sel && typeof sel.startRow === 'number') {
+                  const range = selectionToRange(sel);
+                  setSelectedRange(range);
+                } else {
+                  // Fallback to querying API
+                  const range = getSelectedRange(univerAPI);
+                  setSelectedRange(range);
+                }
+              }
             });
           }
         } catch { /* selection tracking optional */ }
+
+        // Listen for cell edits to refresh charts and pivots
+        try {
+          const editCommands = new Set([
+            'sheet.mutation.set-range-values',
+            'sheet.command.set-range-values',
+            'doc.mutation.rich-text-editing',
+          ]);
+          univerAPI.onCommandExecuted((command: { id: string }) => {
+            if (editCommands.has(command.id) || command.id.includes('set-range') || command.id.includes('mutation')) {
+              clearTimeout((window as any).__chartRefreshTimer);
+              (window as any).__chartRefreshTimer = setTimeout(() => {
+                refreshChartData();
+                refreshPivotData();
+              }, 300);
+            }
+          });
+        } catch { /* cell change tracking optional */ }
 
         // Listen for cell edits to refresh charts and pivots
         // Use CommandExecuted which is reliable in Univer 0.15.x

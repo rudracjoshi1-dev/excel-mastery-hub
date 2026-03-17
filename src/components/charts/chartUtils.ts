@@ -140,6 +140,16 @@ export function buildEChartsOption(config: ChartConfig): any {
 }
 
 /**
+ * Convert a raw Univer selection range object to an A1-notation string.
+ * The range object has { startRow, endRow, startColumn, endColumn }.
+ */
+export function selectionToRange(sel: { startRow: number; endRow: number; startColumn: number; endColumn: number }): string {
+  const startCell = `${colToLetter(sel.startColumn)}${sel.startRow + 1}`;
+  const endCell = `${colToLetter(sel.endColumn)}${sel.endRow + 1}`;
+  return `${startCell}:${endCell}`;
+}
+
+/**
  * Get the currently selected range in the Univer sheet as a string like "A1:D5".
  */
 export function getSelectedRange(univerAPI: FUniver): string | null {
