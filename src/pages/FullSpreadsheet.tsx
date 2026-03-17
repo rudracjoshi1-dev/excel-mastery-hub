@@ -415,13 +415,25 @@ export default function FullSpreadsheet() {
       if (showDataTools) {
         try {
           const workbook = univerAPI.getActiveWorkbook();
-          if (workbook) {
+          console.log("[FullSpreadsheet] workbook:", !!workbook, "onSelectionChange:", typeof workbook?.onSelectionChange);
+          if (workbook && typeof workbook.onSelectionChange === "function") {
             workbook.onSelectionChange(() => {
               const range = getSelectedRange(univerAPI);
+              console.log("[FullSpreadsheet] selection changed, range:", range);
               setSelectedRange(range);
             });
+          } else {
+            // Fallback: use onCommandExecuted to track selection
+            console.log("[FullSpreadsheet] onSelectionChange not available, using command fallback");
+            univerAPI.onCommandExecuted((command: { id: string }) => {
+              if (command.id.includes('selection') || command.id.includes('set-selections')) {
+                const range = getSelectedRange(univerAPI);
+                console.log("[FullSpreadsheet] selection via command:", range, "cmd:", command.id);
+                setSelectedRange(range);
+              }
+            });
           }
-        } catch { /* selection tracking optional */ }
+        } catch (e) { console.error("[FullSpreadsheet] selection tracking error:", e); }
 
         // Listen for cell edits to refresh charts and pivots
         // Use CommandExecuted which is reliable in Univer 0.15.x
