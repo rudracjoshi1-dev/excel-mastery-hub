@@ -140,6 +140,16 @@ export function buildEChartsOption(config: ChartConfig): any {
 }
 
 /**
+ * Convert a raw Univer selection range object to an A1-notation string.
+ * The range object has { startRow, endRow, startColumn, endColumn }.
+ */
+export function selectionToRange(sel: { startRow: number; endRow: number; startColumn: number; endColumn: number }): string {
+  const startCell = `${colToLetter(sel.startColumn)}${sel.startRow + 1}`;
+  const endCell = `${colToLetter(sel.endColumn)}${sel.endRow + 1}`;
+  return `${startCell}:${endCell}`;
+}
+
+/**
  * Get the currently selected range in the Univer sheet as a string like "A1:D5".
  */
 export function getSelectedRange(univerAPI: FUniver): string | null {
@@ -150,32 +160,8 @@ export function getSelectedRange(univerAPI: FUniver): string | null {
     if (!sheet) return null;
     const selection = sheet.getSelection();
     if (!selection) return null;
-    
-    // In Univer 0.15.x, getActiveRange() may return null 
-    // Try getActiveRange first, then fall back to inspecting selection internals
-    let range = selection.getActiveRange();
-    
-    if (!range) {
-      // Fallback: inspect selection internals
-      const sel = selection as any;
-      console.log("[getSelectedRange] selection keys:", Object.getOwnPropertyNames(Object.getPrototypeOf(sel)));
-      console.log("[getSelectedRange] selection._selections:", sel._selections);
-      
-      // Try _selections array which contains raw range data
-      const selections = sel._selections;
-      if (selections && selections.length > 0) {
-        const s = selections[0];
-        const rangeData = s.range || s;
-        const row = rangeData.startRow ?? 0;
-        const col = rangeData.startColumn ?? 0;
-        const endRow = rangeData.endRow ?? row;
-        const endCol = rangeData.endColumn ?? col;
-        const startCell = `${colToLetter(col)}${row + 1}`;
-        const endCell = `${colToLetter(endCol)}${endRow + 1}`;
-        return `${startCell}:${endCell}`;
-      }
-      return null;
-    }
+    const range = selection.getActiveRange();
+    if (!range) return null;
 
     const row = range.getRow();
     const col = range.getColumn();
@@ -185,8 +171,7 @@ export function getSelectedRange(univerAPI: FUniver): string | null {
     const startCell = `${colToLetter(col)}${row + 1}`;
     const endCell = `${colToLetter(col + colCount - 1)}${row + rowCount}`;
     return `${startCell}:${endCell}`;
-  } catch (e) {
-    console.error("[getSelectedRange] error:", e);
+  } catch {
     return null;
   }
 }
