@@ -133,7 +133,7 @@ const FloatingChart = memo(({ config, onUpdate, onRemove, readOnly = false }: Fl
   return (
     <div
       ref={containerRef}
-      className="absolute z-20 bg-card border-2 border-border rounded-lg shadow-lg overflow-hidden flex flex-col"
+      className="absolute bg-card border-2 border-border rounded-lg shadow-lg overflow-hidden flex flex-col pointer-events-auto"
       style={{
         left: config.x,
         top: config.y,

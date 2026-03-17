@@ -25,16 +25,18 @@ export default function FloatingChartLayer({
   const noop = () => {};
 
   return (
-    <Suspense fallback={null}>
-      {charts.map((chart) => (
-        <FloatingChart
-          key={chart.id}
-          config={chart}
-          onUpdate={onUpdate ?? noop}
-          onRemove={onRemove ?? noop}
-          readOnly={readOnly}
-        />
-      ))}
-    </Suspense>
+    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 20 }}>
+      <Suspense fallback={null}>
+        {charts.map((chart) => (
+          <FloatingChart
+            key={chart.id}
+            config={chart}
+            onUpdate={onUpdate ?? noop}
+            onRemove={onRemove ?? noop}
+            readOnly={readOnly}
+          />
+        ))}
+      </Suspense>
+    </div>
   );
 }
