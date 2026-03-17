@@ -415,25 +415,42 @@ export default function FullSpreadsheet() {
       if (showDataTools) {
         try {
           const workbook = univerAPI.getActiveWorkbook();
-          console.log("[FullSpreadsheet] workbook:", !!workbook, "onSelectionChange:", typeof workbook?.onSelectionChange);
-          if (workbook && typeof workbook.onSelectionChange === "function") {
-            workbook.onSelectionChange(() => {
-              const range = getSelectedRange(univerAPI);
-              console.log("[FullSpreadsheet] selection changed, range:", range);
-              setSelectedRange(range);
-            });
-          } else {
-            // Fallback: use onCommandExecuted to track selection
-            console.log("[FullSpreadsheet] onSelectionChange not available, using command fallback");
-            univerAPI.onCommandExecuted((command: { id: string }) => {
-              if (command.id.includes('selection') || command.id.includes('set-selections')) {
-                const range = getSelectedRange(univerAPI);
-                console.log("[FullSpreadsheet] selection via command:", range, "cmd:", command.id);
-                setSelectedRange(range);
+          if (workbook) {
+            // onSelectionChange callback receives raw range objects directly
+            workbook.onSelectionChange((selections: any[]) => {
+              if (selections && selections.length > 0) {
+                const sel = selections[0];
+                // sel is { startRow, endRow, startColumn, endColumn }
+                if (sel && typeof sel.startRow === 'number') {
+                  const range = selectionToRange(sel);
+                  setSelectedRange(range);
+                } else {
+                  // Fallback to querying API
+                  const range = getSelectedRange(univerAPI);
+                  setSelectedRange(range);
+                }
               }
             });
           }
-        } catch (e) { console.error("[FullSpreadsheet] selection tracking error:", e); }
+        } catch { /* selection tracking optional */ }
+
+        // Listen for cell edits to refresh charts and pivots
+        try {
+          const editCommands = new Set([
+            'sheet.mutation.set-range-values',
+            'sheet.command.set-range-values',
+            'doc.mutation.rich-text-editing',
+          ]);
+          univerAPI.onCommandExecuted((command: { id: string }) => {
+            if (editCommands.has(command.id) || command.id.includes('set-range') || command.id.includes('mutation')) {
+              clearTimeout((window as any).__chartRefreshTimer);
+              (window as any).__chartRefreshTimer = setTimeout(() => {
+                refreshChartData();
+                refreshPivotData();
+              }, 300);
+            }
+          });
+        } catch { /* cell change tracking optional */ }
 
         // Listen for cell edits to refresh charts and pivots
         // Use CommandExecuted which is reliable in Univer 0.15.x
