@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 
 // Chart system
 import type { ChartConfig, ChartType } from "@/components/charts/types";
-import { getSelectedRange, readChartData, generateChartId } from "@/components/charts/chartUtils";
+import { getSelectedRange, selectionToRange, readChartData, generateChartId } from "@/components/charts/chartUtils";
 import FloatingChartLayer from "@/components/charts/FloatingChartLayer";
 
 // Table system
