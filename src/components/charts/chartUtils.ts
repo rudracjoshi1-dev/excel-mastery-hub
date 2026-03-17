@@ -145,41 +145,46 @@ export function buildEChartsOption(config: ChartConfig): any {
 export function getSelectedRange(univerAPI: FUniver): string | null {
   try {
     const workbook = univerAPI.getActiveWorkbook();
-    if (!workbook) return null;
+    if (!workbook) { console.log("[getSelectedRange] no workbook"); return null; }
     const sheet = workbook.getActiveSheet();
-    if (!sheet) return null;
+    if (!sheet) { console.log("[getSelectedRange] no sheet"); return null; }
     const selection = sheet.getSelection();
-    if (!selection) return null;
+    if (!selection) { console.log("[getSelectedRange] no selection"); return null; }
     const range = selection.getActiveRange();
-    if (!range) return null;
+    if (!range) { console.log("[getSelectedRange] no activeRange"); return null; }
 
-    // Try multiple APIs to get row/col info
+    // Debug: log all available methods/properties
+    console.log("[getSelectedRange] range type:", typeof range, "range:", range);
+    console.log("[getSelectedRange] getRow:", typeof range.getRow, "getColumn:", typeof range.getColumn, 
+                "getHeight:", typeof range.getHeight, "getWidth:", typeof range.getWidth);
+    
+    // Also try getRange() which may return internal range object
+    const r = range as any;
+    console.log("[getSelectedRange] _range:", r._range, "_rangeData:", r._rangeData, "range.range:", r.range);
+    
     let row: number, col: number, rowCount: number, colCount: number;
     
+    // Try the standard API first
     if (typeof range.getRow === "function") {
       row = range.getRow();
       col = range.getColumn();
       rowCount = typeof range.getHeight === "function" ? range.getHeight() : 1;
       colCount = typeof range.getWidth === "function" ? range.getWidth() : 1;
+      console.log("[getSelectedRange] standard API - row:", row, "col:", col, "h:", rowCount, "w:", colCount);
     } else {
-      // Fallback: try to access range object properties directly
-      const r = range as any;
-      console.log("[getSelectedRange] range object keys:", Object.keys(r), "range:", r);
-      // Try _range or _rangeData property
+      // Fallback
       const rangeData = r._range || r._rangeData || r;
-      row = rangeData.startRow ?? rangeData.row ?? 0;
-      col = rangeData.startColumn ?? rangeData.col ?? rangeData.column ?? 0;
-      const endRow = rangeData.endRow ?? row;
-      const endCol = rangeData.endColumn ?? col;
-      rowCount = endRow - row + 1;
-      colCount = endCol - col + 1;
+      row = rangeData.startRow ?? 0;
+      col = rangeData.startColumn ?? 0;
+      rowCount = (rangeData.endRow ?? row) - row + 1;
+      colCount = (rangeData.endColumn ?? col) - col + 1;
     }
-
-    console.log("[getSelectedRange] row:", row, "col:", col, "rowCount:", rowCount, "colCount:", colCount);
 
     const startCell = `${colToLetter(col)}${row + 1}`;
     const endCell = `${colToLetter(col + colCount - 1)}${row + rowCount}`;
-    return `${startCell}:${endCell}`;
+    const result = `${startCell}:${endCell}`;
+    console.log("[getSelectedRange] result:", result);
+    return result;
   } catch (e) {
     console.error("[getSelectedRange] error:", e);
     return null;
