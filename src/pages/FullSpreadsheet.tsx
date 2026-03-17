@@ -424,14 +424,23 @@ export default function FullSpreadsheet() {
         } catch { /* selection tracking optional */ }
 
         // Listen for cell edits to refresh charts and pivots
+        // Use CommandExecuted which is reliable in Univer 0.15.x
         try {
-          const sheet = univerAPI.getActiveWorkbook()?.getActiveSheet();
-          if (sheet && typeof (sheet as any).onValueChange === "function") {
-            (sheet as any).onValueChange(() => {
-              refreshChartData();
-              refreshPivotData();
-            });
-          }
+          const editCommands = new Set([
+            'sheet.mutation.set-range-values',
+            'sheet.command.set-range-values',
+            'doc.mutation.rich-text-editing',
+          ]);
+          univerAPI.onCommandExecuted((command: { id: string }) => {
+            if (editCommands.has(command.id) || command.id.includes('set-range') || command.id.includes('mutation')) {
+              // Debounce to avoid excessive updates during rapid edits
+              clearTimeout((window as any).__chartRefreshTimer);
+              (window as any).__chartRefreshTimer = setTimeout(() => {
+                refreshChartData();
+                refreshPivotData();
+              }, 300);
+            }
+          });
         } catch { /* cell change tracking optional */ }
       }
 
